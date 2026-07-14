@@ -22,6 +22,7 @@ const state = {
   leads: [],
   testimonials: [],
   complaints: [],
+  loyaltyCustomers: [],
   inv: [],
   imgbbKey: '',
   selectedProducts: new Set(),
@@ -146,7 +147,8 @@ const VIEW_TITLES = {
   dashboard: 'Dashboard', products: 'Products', categories: 'Categories',
   inventory: 'Inventory', import: 'Bulk Import', orders: 'Orders',
   coupons: 'Coupons', sales: 'Sale Events', leads: 'Enquiries',
-  testimonials: 'Testimonials', settings: 'Site Settings',
+  testimonials: 'Testimonials', complaints: 'Complaints', loyalty: 'Loyalty Program',
+  settings: 'Site Settings',
 };
 
 function setupNav() {
@@ -162,6 +164,7 @@ function goView(view) {
   // Re-render views that need fresh data
   if (view === 'inventory') renderInventory();
   if (view === 'orders') renderOrders();
+  if (view === 'loyalty') loadLoyaltyCustomers().then(renderLoyalty);
   if (view === 'dashboard') { renderCharts(); renderLowStockAlert(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -175,6 +178,7 @@ async function loadSettings() {
   // Populate form
   ['site_title','meta_description','keywords','og_image','canonical_url','ga_id','gsc_verification','robots_txt',
    'whatsapp_number','whatsapp_text','instagram_url','facebook_url','youtube_url','pinterest_url','twitter_url',
+   'support_phone','support_email',
    'imgbb_api_key','openai_api_key','gemini_api_key','low_stock_threshold','alert_whatsapp'].forEach(k => {
     const node = $(`set-${k}`);
     if (node) node.value = state.settings[k] ?? '';
@@ -184,6 +188,7 @@ async function saveSettings() {
   const payload = {};
   ['site_title','meta_description','keywords','og_image','canonical_url','ga_id','gsc_verification','robots_txt',
    'whatsapp_number','whatsapp_text','instagram_url','facebook_url','youtube_url','pinterest_url','twitter_url',
+   'support_phone','support_email',
    'imgbb_api_key','openai_api_key','gemini_api_key','low_stock_threshold','alert_whatsapp'].forEach(k => {
     const node = $(`set-${k}`);
     if (node) payload[k] = k === 'low_stock_threshold' ? (Number(node.value) || 5) : node.value.trim();
@@ -976,18 +981,41 @@ function openProductForm(id) {
   // Save
   $(`${formId}-cancel`).onclick = () => m.close();
 
-  // ---------- Gallery management ----------
+  // ---------- Gallery management (reorder · make primary · remove) ----------
   let gallery = Array.isArray(p?.image_urls) ? [...p.image_urls] : [];
   function renderGallery() {
     const slot = $(`${formId}-gallery`);
     if (!slot) return;
-    if (!gallery.length) { slot.innerHTML = `<div style="color:var(--admin-text-mute);font-size:12px;">No additional images yet.</div>`; return; }
+    if (!gallery.length) { slot.innerHTML = `<div style="color:var(--admin-text-mute);font-size:12px;">No additional images yet. Add up to 8 — customers can browse them on the product page.</div>`; return; }
     slot.innerHTML = gallery.map((url, i) => `
-      <div style="position:relative;width:84px;height:84px;border-radius:6px;overflow:hidden;border:1px solid var(--admin-border);background:var(--admin-muted);">
-        <img src="${escapeHTML(url)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />
-        <button type="button" data-gi="${i}" style="position:absolute;top:-2px;right:-2px;width:22px;height:22px;border-radius:50%;background:#fff;border:1px solid var(--admin-border);color:var(--admin-error);font-size:11px;cursor:pointer;" title="Remove">✕</button>
+      <div style="position:relative;width:96px;border-radius:6px;overflow:hidden;border:1px solid var(--admin-border);background:var(--admin-muted);" data-testid="pf-gallery-item-${i}">
+        <img src="${escapeHTML(url)}" style="width:96px;height:84px;object-fit:cover;display:block;" onerror="this.style.display='none'" />
+        <div style="display:flex;justify-content:space-between;background:#fff;border-top:1px solid var(--admin-border);">
+          <button type="button" data-gmove="${i}:-1" title="Move left" ${i===0?'disabled':''} style="flex:1;border:none;background:none;cursor:pointer;padding:3px 0;font-size:10px;color:var(--admin-text-mute);${i===0?'opacity:.3;':''}"><i class="fas fa-chevron-left"></i></button>
+          <button type="button" data-gstar="${i}" title="Make primary image" style="flex:1;border:none;background:none;cursor:pointer;padding:3px 0;font-size:10px;color:#E8A53A;"><i class="fas fa-star"></i></button>
+          <button type="button" data-gi="${i}" title="Remove" style="flex:1;border:none;background:none;cursor:pointer;padding:3px 0;font-size:10px;color:var(--admin-error);"><i class="fas fa-trash"></i></button>
+          <button type="button" data-gmove="${i}:1" title="Move right" ${i===gallery.length-1?'disabled':''} style="flex:1;border:none;background:none;cursor:pointer;padding:3px 0;font-size:10px;color:var(--admin-text-mute);${i===gallery.length-1?'opacity:.3;':''}"><i class="fas fa-chevron-right"></i></button>
+        </div>
       </div>`).join('');
-    slot.querySelectorAll('[data-gi]').forEach(btn => btn.onclick = () => { gallery.splice(parseInt(btn.dataset.gi,10), 1); renderGallery(); });
+    slot.querySelectorAll('[data-gi]').forEach(btn => btn.onclick = () => { gallery.splice(parseInt(btn.dataset.gi, 10), 1); renderGallery(); });
+    slot.querySelectorAll('[data-gmove]').forEach(btn => btn.onclick = () => {
+      const [i, dir] = btn.dataset.gmove.split(':').map(Number);
+      const j = i + dir;
+      if (j < 0 || j >= gallery.length) return;
+      [gallery[i], gallery[j]] = [gallery[j], gallery[i]];
+      renderGallery();
+    });
+    slot.querySelectorAll('[data-gstar]').forEach(btn => btn.onclick = () => {
+      const i = parseInt(btn.dataset.gstar, 10);
+      const current = $(`${formId}-image_url`).value.trim();
+      const promoted = gallery[i];
+      gallery.splice(i, 1);
+      if (current) gallery.unshift(current);
+      $(`${formId}-image_url`).value = promoted;
+      $(`${formId}-img-block`).innerHTML = `<div style="margin-bottom:12px;"><img src="${escapeHTML(promoted)}" alt="" style="max-width:240px;border-radius:6px;border:1px solid var(--admin-border);" /></div>`;
+      renderGallery();
+      showToast('Primary image updated. Remember to save.');
+    });
   }
   renderGallery();
   $(`${formId}-gallery_add_url`).onclick = () => {
@@ -1121,6 +1149,14 @@ function openProductForm(id) {
       res = await supabaseClient.from('products').update(payload).eq('id', p.id).select().single();
     } else {
       res = await supabaseClient.from('products').upsert(payload).select().single();
+    }
+    if (res.error && res.error.message?.includes('image_urls')) {
+      // DB migration not run yet — retry without gallery so save still works
+      delete payload.image_urls;
+      res = isEdit
+        ? await supabaseClient.from('products').update(payload).eq('id', p.id).select().single()
+        : await supabaseClient.from('products').upsert(payload).select().single();
+      if (!res.error) showToast('Saved without gallery — run migration_phase4_loyalty_multiimage.sql in Supabase to enable multiple images.', 'error');
     }
     if (res.error) return showToast('Save failed: ' + res.error.message, 'error');
 
@@ -2188,6 +2224,114 @@ async function deleteLead(id) {
 }
 window.deleteLead = deleteLead;
 
+// ------------------------- Loyalty Program -------------------------
+async function loadLoyaltyCustomers() {
+  try {
+    const { data, error } = await supabaseClient.from('profiles').select('*').order('loyalty_points', { ascending: false }).limit(500);
+    if (error) throw error;
+    state.loyaltyCustomers = data || [];
+  } catch (e) {
+    state.loyaltyCustomers = [];
+    if (e.message?.includes('loyalty_points')) showToast('Run migration_phase4_loyalty_multiimage.sql in Supabase to enable Loyalty.', 'error');
+  }
+}
+
+function renderLoyalty() {
+  const list = state.loyaltyCustomers || [];
+  const kpis = $('loyalty-kpis');
+  if (kpis) {
+    const totBal = list.reduce((s, p) => s + Number(p.loyalty_points || 0), 0);
+    const totEarn = list.reduce((s, p) => s + Number(p.lifetime_points_earned || 0), 0);
+    const totRed = list.reduce((s, p) => s + Number(p.lifetime_points_redeemed || 0), 0);
+    kpis.innerHTML = kpi('Outstanding Points', totBal.toLocaleString('en-IN'), 'fa-coins', `Liability ₹${totBal.toLocaleString('en-IN')}`) +
+      kpi('Lifetime Issued', totEarn.toLocaleString('en-IN'), 'fa-circle-plus') +
+      kpi('Lifetime Redeemed', totRed.toLocaleString('en-IN'), 'fa-circle-minus') +
+      kpi('Members', String(list.length), 'fa-users');
+  }
+  const tbody = $('loyalty-tbody');
+  if (!tbody) return;
+  const q = ($('loyalty-search')?.value || '').toLowerCase().trim();
+  const rows = q
+    ? list.filter(p => (p.name || '').toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q) || (p.phone || '').includes(q))
+    : list;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="ic"><i class="fas fa-coins"></i></div><h4>No customers${q ? ' match your search' : ' yet'}</h4><p>Points are credited automatically when an order is marked Delivered.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(p => `<tr data-testid="loyalty-row-${escapeHTML(p.id)}">
+    <td><strong>${escapeHTML(p.name || '—')}</strong></td>
+    <td style="font-size:12px;">${escapeHTML(p.email || '—')}</td>
+    <td style="font-size:12px;">${escapeHTML(p.phone || '—')}</td>
+    <td style="text-align:right;font-weight:700;color:var(--admin-primary);">${Number(p.loyalty_points || 0).toLocaleString('en-IN')}</td>
+    <td style="text-align:right;">${Number(p.lifetime_points_earned || 0).toLocaleString('en-IN')}</td>
+    <td style="text-align:right;">${Number(p.lifetime_points_redeemed || 0).toLocaleString('en-IN')}</td>
+    <td>
+      <button class="icon-btn" onclick="openLoyaltyAdjust('${escapeHTML(p.id)}')" title="Adjust points" data-testid="loyalty-adjust-${escapeHTML(p.id)}"><i class="fas fa-sliders"></i></button>
+      <button class="icon-btn" onclick="viewLoyaltyHistory('${escapeHTML(p.id)}')" title="View history" data-testid="loyalty-history-${escapeHTML(p.id)}"><i class="fas fa-clock-rotate-left"></i></button>
+    </td>
+  </tr>`).join('');
+}
+
+window.openLoyaltyAdjust = function(userId) {
+  const p = (state.loyaltyCustomers || []).find(x => x.id === userId);
+  if (!p) return;
+  const html = `
+    <div style="margin-bottom:14px;font-size:13px;">
+      <strong>${escapeHTML(p.name || '')}</strong> · ${escapeHTML(p.email || '')}<br>
+      Current balance: <strong style="color:var(--admin-primary);">${Number(p.loyalty_points || 0).toLocaleString('en-IN')} points</strong>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Action</label>
+        <select class="select" id="la-mode" data-testid="la-mode"><option value="add">Add points</option><option value="remove">Remove points</option></select>
+      </div>
+      <div class="field"><label>Points *</label><input class="input" id="la-points" type="number" min="1" step="1" placeholder="e.g. 50" data-testid="la-points" /></div>
+      <div class="field" style="grid-column:1/-1;"><label>Reason / Note *</label><input class="input" id="la-note" placeholder="e.g. Goodwill for delayed delivery" data-testid="la-note" /></div>
+    </div>`;
+  const footer = el('div', {});
+  footer.innerHTML = `<button class="btn btn-secondary" id="la-cancel">Cancel</button><button class="btn btn-primary" id="la-save" data-testid="la-save"><i class="fas fa-check"></i> Apply</button>`;
+  const m = openModal({ title: 'Adjust Loyalty Points', body: html, footer, testid: 'loyalty-adjust' });
+  $('la-cancel').onclick = () => m.close();
+  $('la-save').onclick = async () => {
+    const pts = Math.floor(Number($('la-points').value || 0));
+    const note = $('la-note').value.trim();
+    if (pts <= 0) return showToast('Enter a valid points amount.', 'error');
+    if (!note) return showToast('A note is required for audit history.', 'error');
+    const signed = $('la-mode').value === 'remove' ? -pts : pts;
+    if (signed < 0 && Number(p.loyalty_points || 0) + signed < 0) return showToast('Cannot remove more points than the customer has.', 'error');
+    const { error } = await supabaseClient.from('loyalty_transactions').insert({
+      user_id: userId, type: 'adjust', points: signed, note, created_by: 'admin',
+    });
+    if (error) return showToast('Failed: ' + error.message, 'error');
+    showToast(`${signed > 0 ? 'Added' : 'Removed'} ${pts} points.`);
+    m.close();
+    await loadLoyaltyCustomers();
+    renderLoyalty();
+  };
+};
+
+window.viewLoyaltyHistory = async function(userId) {
+  const p = (state.loyaltyCustomers || []).find(x => x.id === userId);
+  const { data: txns } = await supabaseClient.from('loyalty_transactions').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(100);
+  const list = txns || [];
+  const html = `
+    <div style="margin-bottom:12px;font-size:13px;"><strong>${escapeHTML(p?.name || '')}</strong> · ${escapeHTML(p?.email || '')} · Balance: <strong style="color:var(--admin-primary);">${Number(p?.loyalty_points || 0)}</strong></div>
+    ${!list.length ? '<div class="empty" style="padding:24px;"><h4>No transactions yet</h4></div>' : `
+    <table class="data" style="font-size:12px;">
+      <thead><tr><th>Date</th><th>Type</th><th style="text-align:right">Points</th><th>Note</th><th>By</th></tr></thead>
+      <tbody>${list.map(t => `<tr>
+        <td>${new Date(t.created_at).toLocaleString('en-IN')}</td>
+        <td><span class="badge b-muted">${escapeHTML(t.type)}</span></td>
+        <td style="text-align:right;font-weight:700;color:${Number(t.points) >= 0 ? '#1E8449' : '#C0392B'};">${Number(t.points) >= 0 ? '+' : ''}${t.points}</td>
+        <td>${escapeHTML(t.note || '—')}</td>
+        <td>${escapeHTML(t.created_by || 'system')}</td>
+      </tr>`).join('')}</tbody>
+    </table>`}`;
+  const footer = el('div', {});
+  footer.innerHTML = `<button class="btn btn-secondary" id="lh-close">Close</button>`;
+  const m = openModal({ title: 'Points History', body: html, footer, size: 'lg', testid: 'loyalty-history' });
+  $('lh-close').onclick = () => m.close();
+};
+
 // ------------------------- Testimonials -------------------------
 async function loadTestimonials() {
   const { data } = await supabaseClient.from('testimonials').select('*').order('created_at', { ascending: false });
@@ -2488,6 +2632,7 @@ function setupSearches() {
   let ot; $('orders-search').addEventListener('input', () => { clearTimeout(ot); ot = setTimeout(renderOrders, 200); });
   $('orders-status-filter').addEventListener('change', renderOrders);
   $('complaints-status-filter')?.addEventListener('change', renderComplaints);
+  let lt; $('loyalty-search')?.addEventListener('input', () => { clearTimeout(lt); lt = setTimeout(renderLoyalty, 200); });
 
   // Products "select all on page" header checkbox
   $('products-check-all').addEventListener('change', (e) => {

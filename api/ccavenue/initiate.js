@@ -53,6 +53,43 @@ module.exports = async function handler(req, res) {
   if (Number(amount) <= 0) { res.status(400).json({ error: 'Invalid amount' }); return; }
   if (!ship.email || !ship.name || !ship.phone) { res.status(400).json({ error: 'Missing customer email / name / phone' }); return; }
 
+  // ---------- LOYALTY REDEMPTION (server-side validation) ----------
+  // 1 point = ₹1. Max redeemable = 50% of items subtotal, capped at balance.
+  let loyaltyPoints = 0;
+  const requestedPoints = Math.floor(Number(body.loyalty_points || 0));
+  const validUser = userId && /^[0-9a-f-]{36}$/i.test(userId);
+  if (requestedPoints > 0 && validUser) {
+    try {
+      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=loyalty_points&limit=1`, {
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      });
+      const profs = await profRes.json();
+      const balance = Math.max(0, Math.floor(Number((Array.isArray(profs) && profs[0] && profs[0].loyalty_points) || 0)));
+      const maxByOrder = Math.floor(subtotal * 0.5);
+      loyaltyPoints = Math.min(requestedPoints, balance, maxByOrder);
+      if (loyaltyPoints > 0) {
+        const txnRes = await fetch(`${SUPABASE_URL}/rest/v1/loyalty_transactions`, {
+          method: 'POST',
+          headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            user_id: userId, type: 'redeem', points: -loyaltyPoints,
+            note: `Redeemed on order ${orderId}`, created_by: 'checkout',
+          }),
+        });
+        if (!txnRes.ok) {
+          console.error('[ccavenue/initiate] loyalty redeem txn failed:', await txnRes.text());
+          loyaltyPoints = 0; // don't apply discount if ledger write failed
+        }
+      }
+    } catch (e) {
+      console.error('[ccavenue/initiate] loyalty validation failed:', e.message);
+      loyaltyPoints = 0;
+    }
+  }
+  // Recompute the payable amount server-side (client totals are advisory only)
+  const serverTotal = Math.max(1, subtotal - discountAmt + shippingAmt - loyaltyPoints);
+  const payAmount = loyaltyPoints > 0 ? serverTotal.toFixed(2) : amount;
+
   // 1️⃣  Insert pending order in Supabase via service role (bypasses RLS, guaranteed write)
   try {
     const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
@@ -67,10 +104,12 @@ module.exports = async function handler(req, res) {
         user_id: userId && /^[0-9a-f-]{36}$/i.test(userId) ? userId : null,
         ccavenue_order_id: orderId,
         items,
-        total_amount: Number(amount),
-        items_subtotal: subtotal || Number(amount),
+        total_amount: Number(payAmount),
+        items_subtotal: subtotal || Number(payAmount),
         shipping_amount: shippingAmt,
         discount_amount: discountAmt,
+        loyalty_points_redeemed: loyaltyPoints,
+        loyalty_discount: loyaltyPoints,
         status: 'Processing',
         payment_status: 'Pending',
         payment_method: 'CCAvenue',
@@ -95,7 +134,7 @@ module.exports = async function handler(req, res) {
   const payload = {
     merchant_id:      MERCHANT_ID,
     order_id:         orderId,
-    amount,
+    amount:           payAmount,
     currency:         'INR',
     redirect_url:     `${SITE_URL}/api/ccavenue/response`,
     cancel_url:       `${SITE_URL}/api/ccavenue/response`,
@@ -131,7 +170,7 @@ module.exports = async function handler(req, res) {
 <body>
   <div class="s"></div>
   <h2 style="font-family:Georgia,serif;margin:0 0 6px;">Redirecting to secure payment</h2>
-  <p style="opacity:.8;margin:0;">Powered by CCAvenue · Order ${escapeHtml(orderId)} · ₹${escapeHtml(amount)}</p>
+  <p style="opacity:.8;margin:0;">Powered by CCAvenue · Order ${escapeHtml(orderId)} · ₹${escapeHtml(payAmount)}</p>
   <form id="f" method="post" action="${escapeHtml(checkoutUrl)}">
     <input type="hidden" name="encRequest" value="${escapeHtml(ciphertext)}" />
     <input type="hidden" name="access_code" value="${escapeHtml(ACCESS_CODE)}" />

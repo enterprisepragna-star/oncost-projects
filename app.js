@@ -338,12 +338,13 @@ async function renderProductDetail() {
   if (Array.isArray(p.image_urls)) p.image_urls.forEach(u => { if (u && u !== p.image_url) allImages.push(u); });
   const mainImg = allImages[0] || null;
   const galleryHTML = allImages.length > 1
-    ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-        ${allImages.map((u, i) => `<button class="pd-thumb ${i===0?'active':''}" data-img="${escapeHTML(u)}" type="button"><img src="${escapeHTML(u)}" alt="" /></button>`).join('')}
+    ? `<div class="pd-thumbs" data-testid="pd-thumbs">
+        ${allImages.map((u, i) => `<button class="pd-thumb ${i===0?'active':''}" data-idx="${i}" data-img="${escapeHTML(u)}" type="button" aria-label="View image ${i+1}" data-testid="pd-thumb-${i}"><img src="${escapeHTML(u)}" alt="" loading="lazy" /></button>`).join('')}
       </div>`
     : '';
   const imgHTML = mainImg
-    ? `<img id="pd-main-img" src="${escapeHTML(mainImg)}" alt="${escapeHTML(p.name)}" />`
+    ? `<img id="pd-main-img" src="${escapeHTML(mainImg)}" alt="${escapeHTML(p.name)}" class="img-fade" onload="this.classList.add('loaded')" />
+       <button type="button" class="pd-expand-btn" id="pd-expand" title="View fullscreen" data-testid="pd-expand"><i class="fas fa-expand"></i></button>`
     : `<div class="placeholder"><i class="fas fa-image"></i></div>`;
 
   const related = state.products.filter(x => x.category === p.category && x.id !== p.id).slice(0, 4);
@@ -429,13 +430,41 @@ async function renderProductDetail() {
       </section>` : ''}
   `;
 
-  // Gallery thumbnail click handlers
+  // Gallery: thumbnail switching, hover zoom (desktop), lightbox
+  state._pdImages = allImages;
+  state._pdImageIdx = 0;
   $$('.pd-thumb').forEach(btn => btn.addEventListener('click', () => {
     $$('.pd-thumb').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const main = $('#pd-main-img');
-    if (main) main.src = btn.dataset.img;
+    if (main) {
+      main.classList.remove('loaded');
+      main.src = btn.dataset.img;
+      main.onload = () => main.classList.add('loaded');
+    }
+    state._pdImageIdx = Number(btn.dataset.idx || 0);
   }));
+  const zoomWrap = $('.pd-gallery');
+  const mainEl = $('#pd-main-img');
+  if (zoomWrap && mainEl) {
+    // Desktop hover zoom lens
+    zoomWrap.addEventListener('mousemove', (e) => {
+      if (window.matchMedia('(hover: none)').matches) return;
+      const r = zoomWrap.getBoundingClientRect();
+      const x = ((e.clientX - r.left) / r.width) * 100;
+      const y = ((e.clientY - r.top) / r.height) * 100;
+      mainEl.style.transformOrigin = `${x}% ${y}%`;
+      mainEl.style.transform = 'scale(1.9)';
+      zoomWrap.classList.add('zooming');
+    });
+    zoomWrap.addEventListener('mouseleave', () => {
+      mainEl.style.transform = '';
+      zoomWrap.classList.remove('zooming');
+    });
+    const openLB = () => allImages.length && openLightbox(allImages, state._pdImageIdx, p.name);
+    zoomWrap.addEventListener('click', openLB);
+    $('#pd-expand')?.addEventListener('click', (e) => { e.stopPropagation(); openLB(); });
+  }
 
   // Variant chip handlers — swap price/stock/image when customer picks a variant
   if (variants.length) {
@@ -483,9 +512,33 @@ async function loadCart() {
     state.cart.forEach(it => { it.product = state.products.find(p => p.id === it.product_id); });
     return;
   }
+  // Logged in — load server cart, then merge any guest cart left in localStorage
+  let guest = [];
+  try { guest = JSON.parse(localStorage.getItem('oncost_cart') || '[]'); } catch { guest = []; }
   try {
     const { data } = await supabaseClient.from('cart_items').select('*').eq('user_id', state.user.id);
     state.cart = (data || []).map(it => ({ ...it, product: state.products.find(p => p.id === it.product_id) }));
+    if (guest.length) {
+      for (const g of guest) {
+        if (!g.product_id) continue;
+        const existing = state.cart.find(it => it.product_id === g.product_id && (it.variant_id || null) === (g.variant_id || null));
+        if (existing) {
+          const newQty = existing.qty + (g.qty || 1);
+          const { error } = await supabaseClient.from('cart_items').update({ qty: newQty }).eq('id', existing.id);
+          if (!error) existing.qty = newQty;
+        } else {
+          const row = { user_id: state.user.id, product_id: g.product_id, qty: g.qty || 1 };
+          if (g.variant_id) { row.variant_id = g.variant_id; row.variant_label = g.variant_label; }
+          const { data: d, error } = await supabaseClient.from('cart_items').insert(row).select().single();
+          if (!error && d) {
+            d.product = state.products.find(p => p.id === g.product_id);
+            d.unit_price = g.unit_price;
+            state.cart.push(d);
+          }
+        }
+      }
+      localStorage.removeItem('oncost_cart');
+    }
   } catch { state.cart = []; }
 }
 function saveGuestCart() {
@@ -538,14 +591,20 @@ async function updateCartQty(rowId, qty) {
   qty = Math.max(1, parseInt(qty, 10) || 1);
   const it = state.cart.find(x => x.id === rowId);
   if (!it) return;
+  if (state.user && !String(rowId).startsWith('g-')) {
+    const { error } = await supabaseClient.from('cart_items').update({ qty }).eq('id', rowId);
+    if (error) { toast('Could not update quantity: ' + error.message, 'err'); return; }
+  }
   it.qty = qty;
-  if (state.user && !String(rowId).startsWith('g-')) await supabaseClient.from('cart_items').update({ qty }).eq('id', rowId);
-  else saveGuestCart();
+  if (!state.user) saveGuestCart();
   renderCart();
   updateCartBadge();
 }
 async function removeCartItem(rowId) {
-  if (state.user && !String(rowId).startsWith('g-')) await supabaseClient.from('cart_items').delete().eq('id', rowId);
+  if (state.user && !String(rowId).startsWith('g-')) {
+    const { error } = await supabaseClient.from('cart_items').delete().eq('id', rowId);
+    if (error) { toast('Could not remove item: ' + error.message, 'err'); return; }
+  }
   state.cart = state.cart.filter(x => x.id !== rowId);
   saveGuestCart();
   renderCart();
@@ -767,6 +826,119 @@ window.openProductReviewModal = function(productId, reviewToken) {
   modal.showModal();
 };
 
+// ---------- Fullscreen Image Lightbox (zoom, swipe, pinch, keyboard) ----------
+window.openLightbox = function(images, startIdx = 0, alt = '') {
+  if (!images || !images.length) return;
+  let idx = Math.max(0, Math.min(startIdx, images.length - 1));
+  let scale = 1, tx = 0, ty = 0;
+  let pointers = new Map(), lastDist = 0, lastTap = 0, swipeStartX = null;
+
+  const lb = document.createElement('div');
+  lb.className = 'lightbox';
+  lb.setAttribute('data-testid', 'image-lightbox');
+  lb.innerHTML = `
+    <button class="lb-close" aria-label="Close" data-testid="lb-close"><i class="fas fa-xmark"></i></button>
+    ${images.length > 1 ? `
+      <button class="lb-nav lb-prev" aria-label="Previous image" data-testid="lb-prev"><i class="fas fa-chevron-left"></i></button>
+      <button class="lb-nav lb-next" aria-label="Next image" data-testid="lb-next"><i class="fas fa-chevron-right"></i></button>` : ''}
+    <div class="lb-stage"><img class="lb-img" src="${escapeHTML(images[idx])}" alt="${escapeHTML(alt)}" draggable="false" /></div>
+    <div class="lb-footer">
+      <span class="lb-counter" data-testid="lb-counter">${idx + 1} / ${images.length}</span>
+      ${images.length > 1 ? `<div class="lb-dots">${images.map((_, i) => `<button class="lb-dot ${i===idx?'on':''}" data-i="${i}"></button>`).join('')}</div>` : ''}
+    </div>`;
+  document.body.appendChild(lb);
+  document.body.style.overflow = 'hidden';
+  requestAnimationFrame(() => lb.classList.add('open'));
+
+  const img = lb.querySelector('.lb-img');
+  const stage = lb.querySelector('.lb-stage');
+  const applyT = () => { img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`; };
+  const resetT = () => { scale = 1; tx = 0; ty = 0; applyT(); };
+
+  function show(i) {
+    idx = (i + images.length) % images.length;
+    resetT();
+    img.style.opacity = '0';
+    img.src = images[idx];
+    img.onload = () => { img.style.opacity = '1'; };
+    lb.querySelector('.lb-counter').textContent = `${idx + 1} / ${images.length}`;
+    lb.querySelectorAll('.lb-dot').forEach((d, i2) => d.classList.toggle('on', i2 === idx));
+  }
+  function close() {
+    lb.classList.remove('open');
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', onKey);
+    setTimeout(() => lb.remove(), 220);
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowLeft') show(idx - 1);
+    else if (e.key === 'ArrowRight') show(idx + 1);
+  }
+  document.addEventListener('keydown', onKey);
+  lb.querySelector('.lb-close').addEventListener('click', close);
+  lb.querySelector('.lb-prev')?.addEventListener('click', (e) => { e.stopPropagation(); show(idx - 1); });
+  lb.querySelector('.lb-next')?.addEventListener('click', (e) => { e.stopPropagation(); show(idx + 1); });
+  lb.querySelectorAll('.lb-dot').forEach(d => d.addEventListener('click', (e) => { e.stopPropagation(); show(Number(d.dataset.i)); }));
+  lb.addEventListener('click', (e) => { if (e.target === lb || e.target === stage) close(); });
+
+  // Double-click / double-tap zoom toggle
+  img.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    if (scale > 1) resetT();
+    else { scale = 2.4; applyT(); }
+  });
+
+  // Pointer events: pinch-zoom + pan + swipe
+  stage.addEventListener('pointerdown', (e) => {
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) {
+      swipeStartX = e.clientX;
+      const now = Date.now();
+      if (now - lastTap < 300) { // double-tap
+        if (scale > 1) resetT(); else { scale = 2.4; applyT(); }
+        swipeStartX = null;
+      }
+      lastTap = now;
+    }
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      lastDist = Math.hypot(a.x - b.x, a.y - b.y);
+      swipeStartX = null;
+    }
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    const prev = pointers.get(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (lastDist) {
+        scale = Math.max(1, Math.min(4, scale * (dist / lastDist)));
+        if (scale === 1) { tx = 0; ty = 0; }
+        applyT();
+      }
+      lastDist = dist;
+    } else if (pointers.size === 1 && scale > 1) {
+      tx += e.clientX - prev.x;
+      ty += e.clientY - prev.y;
+      applyT();
+    }
+  });
+  const endPointer = (e) => {
+    if (pointers.size === 1 && swipeStartX != null && scale === 1) {
+      const dx = e.clientX - swipeStartX;
+      if (Math.abs(dx) > 60 && images.length > 1) show(dx < 0 ? idx + 1 : idx - 1);
+    }
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) lastDist = 0;
+    if (!pointers.size) swipeStartX = null;
+  };
+  stage.addEventListener('pointerup', endPointer);
+  stage.addEventListener('pointercancel', endPointer);
+};
+
 // ---------- Categories ----------
 async function loadCategories() {
   try {
@@ -784,7 +956,7 @@ async function renderAccount() {
     return;
   }
   const tab = param('tab') || 'orders';
-  let orders = [], leads = [];
+  let orders = [], leads = [], loyaltyTxns = [];
   // Match orders by user_id OR by email (so guest orders placed BEFORE signup also appear)
   try {
     const r = await supabaseClient
@@ -795,6 +967,16 @@ async function renderAccount() {
     orders = r.data || [];
   } catch { /* ignore */ }
   try { const r = await supabaseClient.from('leads').select('*').eq('user_id', state.user.id).order('created_at', { ascending: false }); leads = r.data || []; } catch { /* ignore */ }
+  if (tab === 'loyalty') {
+    try {
+      const r = await supabaseClient.from('loyalty_transactions').select('*').eq('user_id', state.user.id).order('created_at', { ascending: false }).limit(50);
+      loyaltyTxns = r.data || [];
+    } catch { /* migration not run yet */ }
+    try {
+      const { data: prof } = await supabaseClient.from('profiles').select('*').eq('id', state.user.id).single();
+      if (prof) state.profile = prof;
+    } catch { /* ignore */ }
+  }
 
   slot.innerHTML = `
     <div class="account-grid">
@@ -803,15 +985,18 @@ async function renderAccount() {
           <div style="font-weight:600;font-size:14px;">${escapeHTML(state.profile?.name || state.user.email.split('@')[0])}</div>
           <div style="font-size:12px;color:var(--muted);">${escapeHTML(state.user.email)}</div>
         </div>
-        <button class="${tab==='orders'?'active':''}" onclick="location.href='account.html?tab=orders'"><i class="fas fa-receipt"></i> My Orders</button>
-        <button class="${tab==='wishlist'?'active':''}" onclick="location.href='account.html?tab=wishlist'"><i class="fas fa-heart"></i> Wishlist ${state.wishlist.length ? `<span style="margin-left:auto;background:var(--burgundy);color:#fff;padding:1px 7px;border-radius:10px;font-size:11px;">${state.wishlist.length}</span>` : ''}</button>
-        <button class="${tab==='enquiries'?'active':''}" onclick="location.href='account.html?tab=enquiries'"><i class="fas fa-envelope"></i> Enquiries</button>
-        <button class="${tab==='profile'?'active':''}" onclick="location.href='account.html?tab=profile'"><i class="fas fa-user"></i> Profile</button>
+        <button class="${tab==='orders'?'active':''}" onclick="location.href='account.html?tab=orders'" data-testid="acct-tab-orders"><i class="fas fa-receipt"></i> My Orders</button>
+        <button class="${tab==='loyalty'?'active':''}" onclick="location.href='account.html?tab=loyalty'" data-testid="acct-tab-loyalty"><i class="fas fa-coins"></i> Loyalty Points ${Number(state.profile?.loyalty_points||0) > 0 ? `<span style="margin-left:auto;background:var(--gold);color:var(--burgundy);padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;">${Number(state.profile.loyalty_points)}</span>` : ''}</button>
+        <button class="${tab==='wishlist'?'active':''}" onclick="location.href='account.html?tab=wishlist'" data-testid="acct-tab-wishlist"><i class="fas fa-heart"></i> Wishlist ${state.wishlist.length ? `<span style="margin-left:auto;background:var(--burgundy);color:#fff;padding:1px 7px;border-radius:10px;font-size:11px;">${state.wishlist.length}</span>` : ''}</button>
+        <button class="${tab==='enquiries'?'active':''}" onclick="location.href='account.html?tab=enquiries'" data-testid="acct-tab-enquiries"><i class="fas fa-envelope"></i> Enquiries</button>
+        <button class="${tab==='profile'?'active':''}" onclick="location.href='account.html?tab=profile'" data-testid="acct-tab-profile"><i class="fas fa-user"></i> Profile</button>
+        <button onclick="location.href='support.html'" data-testid="acct-tab-support"><i class="fas fa-headset"></i> Support</button>
         ${state.isAdmin ? `<button onclick="location.href='admin-dashboard.html'" style="color:var(--gold);font-weight:700;border-top:1px solid var(--line);margin-top:8px;padding-top:14px;"><i class="fas fa-shield-halved"></i> Admin Console</button>` : ''}
         <button onclick="doLogout()"><i class="fas fa-right-from-bracket"></i> Sign out</button>
       </aside>
       <main class="account-pane">
         ${tab === 'orders' ? renderAccountOrders(orders) : ''}
+        ${tab === 'loyalty' ? renderAccountLoyalty(loyaltyTxns) : ''}
         ${tab === 'wishlist' ? renderAccountWishlist() : ''}
         ${tab === 'enquiries' ? renderAccountLeads(leads) : ''}
         ${tab === 'profile' ? renderAccountProfile() : ''}
@@ -826,18 +1011,157 @@ function renderAccountWishlist() {
   return `<h2>My Wishlist <span style="font-size:14px;color:var(--muted);font-weight:400;">· ${items.length} item${items.length===1?'':'s'}</span></h2>
     <div class="product-grid" style="margin-top:18px;">${items.map(productCardHTML).join('')}</div>`;
 }
+const ORDER_STATUS_TONES = {
+  Paid: ['#E6F4EA', '#1E8449'], Delivered: ['#E6F4EA', '#1E8449'], Shipped: ['#E8F0FE', '#1A56DB'],
+  Packed: ['#FFF8E7', '#92600A'], Confirmed: ['#FFF8E7', '#92600A'], Processing: ['#F4F0E8', '#7A726B'],
+  Pending: ['#F4F0E8', '#7A726B'], Cancelled: ['#FBECEC', '#C0392B'], Failed: ['#FBECEC', '#C0392B'],
+  Returned: ['#FBECEC', '#C0392B'], Refunded: ['#E8F0FE', '#1A56DB'],
+};
+function orderBadge(status) {
+  const [bg, fg] = ORDER_STATUS_TONES[status] || ORDER_STATUS_TONES.Pending;
+  return `<span style="padding:4px 12px;border-radius:999px;background:${bg};color:${fg};font-size:12px;font-weight:700;letter-spacing:.3px;">${escapeHTML(status || 'Pending')}</span>`;
+}
+const CANCELLABLE_STATUSES = ['Processing', 'Pending', 'Paid', 'Confirmed', 'Packed'];
+
 function renderAccountOrders(orders) {
   if (!orders.length) return `<h2>My Orders</h2><div class="empty-state"><i class="fas fa-receipt"></i><h3>No orders yet</h3><p>Your orders will show up here.</p><a class="btn primary" href="products.html">Browse Products</a></div>`;
-  return `<h2>My Orders</h2>${orders.map(o => `
-    <div style="border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div><b>#${escapeHTML(String(o.id).substring(0,8))}</b> <span style="color:var(--muted);font-size:12px;">· ${new Date(o.created_at).toLocaleDateString()}</span></div>
-        <span style="padding:3px 10px;border-radius:4px;background:var(--cream);color:var(--burgundy);font-size:12px;font-weight:600;">${escapeHTML(o.status)}</span>
+  state._accountOrders = orders;
+  return `<h2>My Orders <span style="font-size:14px;color:var(--muted);font-weight:400;">· ${orders.length} order${orders.length===1?'':'s'}</span></h2>
+  ${orders.map(o => {
+    const items = Array.isArray(o.items) ? o.items : [];
+    const displayId = o.ccavenue_order_id || ('#' + String(o.id).substring(0, 8));
+    const canCancel = CANCELLABLE_STATUSES.includes(o.status);
+    const isPaid = o.payment_status === 'Paid' || o.status === 'Paid' || ['Shipped','Delivered','Packed'].includes(o.status);
+    const subtotal = Number(o.items_subtotal || 0);
+    const shipping = Number(o.shipping_amount || 0);
+    const discount = Number(o.discount_amount || 0);
+    const loyalty  = Number(o.loyalty_discount || 0);
+    const itemRows = items.length ? items.map(it => {
+      const prod = state.products.find(p => p.id === it.product_id);
+      const img = prod?.image_url
+        ? `<img src="${escapeHTML(prod.image_url)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />`
+        : `<i class="fas fa-gift" style="color:var(--muted);"></i>`;
+      const qty = Number(it.qty || it.quantity || 1);
+      const price = Number(it.price || 0);
+      return `<div class="oc-item" data-testid="order-item">
+        <a class="oc-thumb" href="product.html?id=${encodeURIComponent(it.product_id || '')}">${img}</a>
+        <div class="oc-item-meta">
+          <a href="product.html?id=${encodeURIComponent(it.product_id || '')}" class="oc-item-name">${escapeHTML(it.name || 'Item')}</a>
+          <div class="oc-item-sub">${fmtINR(price)} × ${qty}</div>
+        </div>
+        <div class="oc-item-total">${fmtINR(price * qty)}</div>
+        ${o.status === 'Delivered' && it.product_id ? `<a class="btn ghost sm" href="product.html?id=${encodeURIComponent(it.product_id)}#reviews" title="Rate this product" data-testid="order-rate-btn"><i class="fas fa-star"></i> Rate</a>` : ''}
+      </div>`;
+    }).join('') : `<div style="padding:14px;color:var(--muted);font-size:13px;">Item details unavailable for this order.</div>`;
+
+    return `<article class="order-card" data-testid="order-card-${escapeHTML(String(o.id))}">
+      <header class="oc-head">
+        <div>
+          <div class="oc-id">${escapeHTML(displayId)}</div>
+          <div class="oc-date"><i class="far fa-calendar"></i> ${new Date(o.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+        </div>
+        <div class="oc-badges">
+          ${orderBadge(o.status)}
+          ${o.payment_status && o.payment_status !== o.status ? `<span style="font-size:11px;color:var(--muted);">Payment: ${escapeHTML(o.payment_status)}</span>` : ''}
+          ${o.awb_number ? `<span style="font-size:11px;color:var(--muted);">AWB: ${escapeHTML(o.awb_number)}</span>` : ''}
+        </div>
+      </header>
+      <div class="oc-items">${itemRows}</div>
+      <div class="oc-summary">
+        ${subtotal ? `<div class="line"><span>Subtotal</span><span>${fmtINR(subtotal)}</span></div>` : ''}
+        ${discount > 0 ? `<div class="line" style="color:var(--success);"><span>Discount</span><span>−${fmtINR(discount)}</span></div>` : ''}
+        ${loyalty > 0 ? `<div class="line" style="color:var(--success);"><span>Loyalty points used</span><span>−${fmtINR(loyalty)}</span></div>` : ''}
+        ${subtotal ? `<div class="line"><span>Shipping</span><span>${shipping === 0 ? 'Free' : fmtINR(shipping)}</span></div>` : ''}
+        <div class="line total"><span>Grand Total</span><span>${fmtINR(o.total_amount)}</span></div>
       </div>
-      <div style="font-size:13px;color:var(--muted);">${(Array.isArray(o.items) ? o.items : []).map(i => escapeHTML(i.name)).join(' · ')}</div>
-      <div style="margin-top:8px;font-weight:700;color:var(--burgundy);">${fmtINR(o.total_amount)}</div>
+      <footer class="oc-actions">
+        ${isPaid ? `<a class="btn outline sm" href="/api/store/invoice-pdf?order_id=${encodeURIComponent(o.ccavenue_order_id || o.id)}&email=${encodeURIComponent(o.guest_email || state.user.email)}" data-testid="order-invoice-btn"><i class="fas fa-file-arrow-down"></i> Invoice</a>` : ''}
+        ${o.tracking_url ? `<a class="btn outline sm" href="${escapeHTML(o.tracking_url)}" target="_blank" rel="noopener" data-testid="order-track-btn"><i class="fas fa-truck-fast"></i> Track</a>` : (o.awb_number ? `<a class="btn outline sm" href="https://www.delhivery.com/track-v2/package/${escapeHTML(o.awb_number)}" target="_blank" rel="noopener" data-testid="order-track-btn"><i class="fas fa-truck-fast"></i> Track</a>` : '')}
+        ${items.length ? `<button class="btn outline sm" onclick="buyAgain('${escapeHTML(String(o.id))}')" data-testid="order-buyagain-btn"><i class="fas fa-rotate-right"></i> Buy Again</button>` : ''}
+        ${canCancel ? `<button class="btn ghost sm" style="color:var(--error);" onclick="cancelMyOrder('${escapeHTML(String(o.id))}')" data-testid="order-cancel-btn"><i class="fas fa-ban"></i> Cancel</button>` : ''}
+        <a class="btn ghost sm" href="support.html?order_id=${encodeURIComponent(o.ccavenue_order_id || o.id)}" data-testid="order-support-btn"><i class="fas fa-headset"></i> Help</a>
+      </footer>
+    </article>`;
+  }).join('')}`;
+}
+
+window.buyAgain = async function(orderId) {
+  const o = (state._accountOrders || []).find(x => String(x.id) === String(orderId));
+  if (!o || !Array.isArray(o.items)) return;
+  let added = 0;
+  for (const it of o.items) {
+    const prod = state.products.find(p => p.id === it.product_id);
+    if (!prod || Number(prod.stock || 0) === 0) continue;
+    await addToCart(it.product_id, Number(it.qty || it.quantity || 1));
+    added++;
+  }
+  if (added) setTimeout(() => location.href = 'cart.html', 700);
+  else toast('These items are no longer available', 'err');
+};
+
+window.cancelMyOrder = async function(orderId) {
+  if (!confirm('Cancel this order? If you already paid, our team will process your refund within 5–7 working days.')) return;
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const r = await fetch('/api/store/cancel-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+      body: JSON.stringify({ order_id: orderId }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Cancellation failed');
+    toast('Order cancelled', 'ok');
+    renderAccount();
+  } catch (e) { toast(e.message, 'err'); }
+};
+
+function renderAccountLoyalty(txns) {
+  const p = state.profile || {};
+  const balance = Number(p.loyalty_points || 0);
+  const earned = Number(p.lifetime_points_earned || 0);
+  const redeemed = Number(p.lifetime_points_redeemed || 0);
+  const TXN_META = {
+    earn:   ['fa-circle-plus', 'var(--success, #1E8449)', 'Earned'],
+    redeem: ['fa-circle-minus', 'var(--burgundy)', 'Redeemed'],
+    refund: ['fa-rotate-left', '#1A56DB', 'Refunded'],
+    adjust: ['fa-sliders', '#92600A', 'Adjustment'],
+  };
+  return `<h2>Loyalty Points</h2>
+    <div class="loyalty-cards">
+      <div class="loyalty-card main" data-testid="loyalty-balance-card">
+        <div class="lc-label"><i class="fas fa-coins"></i> Available Balance</div>
+        <div class="lc-value">${balance.toLocaleString('en-IN')}</div>
+        <div class="lc-sub">Worth ${fmtINR(balance)} on your next order</div>
+      </div>
+      <div class="loyalty-card">
+        <div class="lc-label">Lifetime Earned</div>
+        <div class="lc-value" style="font-size:1.6rem;">${earned.toLocaleString('en-IN')}</div>
+      </div>
+      <div class="loyalty-card">
+        <div class="lc-label">Points Redeemed</div>
+        <div class="lc-value" style="font-size:1.6rem;">${redeemed.toLocaleString('en-IN')}</div>
+      </div>
     </div>
-  `).join('')}`;
+    <div style="background:var(--gold-soft);border:1px solid var(--gold);border-radius:var(--radius);padding:14px 18px;font-size:13px;margin:18px 0;line-height:1.6;">
+      <strong><i class="fas fa-circle-info"></i> How it works:</strong>
+      Earn <strong>1 point for every ₹10 spent</strong> — credited when your order is delivered.
+      Redeem points at checkout (1 point = ₹1) for up to <strong>50% of your order value</strong>.
+    </div>
+    <h3 style="font-size:1.05rem;margin:22px 0 10px;">Points History</h3>
+    ${!txns.length
+      ? `<div class="empty-state" style="padding:32px;"><i class="fas fa-coins"></i><h3>No transactions yet</h3><p>Complete an order to start earning points.</p><a class="btn primary" href="products.html">Shop Now</a></div>`
+      : `<div class="loyalty-history" data-testid="loyalty-history">${txns.map(t => {
+          const [icon, color, label] = TXN_META[t.type] || TXN_META.adjust;
+          const pts = Number(t.points || 0);
+          return `<div class="lh-row">
+            <i class="fas ${icon}" style="color:${color};font-size:18px;"></i>
+            <div class="lh-meta">
+              <div class="lh-title">${label}${t.note ? ` · <span style="font-weight:400;color:var(--muted);">${escapeHTML(t.note)}</span>` : ''}</div>
+              <div class="lh-date">${new Date(t.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+            </div>
+            <div class="lh-points" style="color:${pts >= 0 ? 'var(--success, #1E8449)' : 'var(--burgundy)'};">${pts >= 0 ? '+' : ''}${pts.toLocaleString('en-IN')}</div>
+          </div>`;
+        }).join('')}</div>`}`;
 }
 function renderAccountLeads(leads) {
   if (!leads.length) return `<h2>My Enquiries</h2><div class="empty-state"><i class="fas fa-envelope-open"></i><h3>No enquiries yet</h3><p>Need bulk pricing or customization? Send us an enquiry.</p><a class="btn primary" href="bulk.html">Submit Bulk Enquiry</a></div>`;

@@ -696,3 +696,111 @@ h1,h2,h3,h4,h5 { font-family: var(--font-display); color: var(--burgundy); lette
   .product-card .info { padding: 12px; }
   .btn { padding: 11px 18px; font-size: 13px; }
 }
+
+/* ===================== Phase 4: Gallery, Lightbox, Orders, Loyalty ===================== */
+.img-fade { opacity: 0; transition: opacity .45s ease; }
+.img-fade.loaded { opacity: 1; }
+
+.pd-gallery { position: relative; overflow: hidden; cursor: zoom-in; }
+.pd-gallery img { transition: transform .18s ease-out; will-change: transform; }
+.pd-gallery.zooming img { transition: none; }
+.pd-expand-btn {
+  position: absolute; right: 12px; bottom: 12px; z-index: 2;
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line);
+  background: rgba(255,255,255,.92); color: var(--burgundy); cursor: pointer;
+  display: grid; place-items: center; font-size: 15px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.12); transition: background-color .15s, transform .15s;
+}
+.pd-expand-btn:hover { background: var(--gold-soft); transform: scale(1.08); }
+.pd-thumbs { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+/* Lightbox */
+.lightbox {
+  position: fixed; inset: 0; z-index: 1000; background: rgba(20, 8, 12, .94);
+  opacity: 0; transition: opacity .22s ease; display: flex; flex-direction: column;
+  backdrop-filter: blur(6px);
+}
+.lightbox.open { opacity: 1; }
+.lb-stage { flex: 1; display: grid; place-items: center; overflow: hidden; touch-action: none; }
+.lb-img {
+  max-width: 92vw; max-height: 82vh; object-fit: contain; user-select: none;
+  transition: opacity .2s ease; border-radius: 4px;
+}
+.lb-close {
+  position: absolute; top: 18px; right: 18px; z-index: 3;
+  width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25);
+  background: rgba(255,255,255,.1); color: #fff; font-size: 18px; cursor: pointer;
+  display: grid; place-items: center; transition: background-color .15s;
+}
+.lb-close:hover { background: rgba(255,255,255,.25); }
+.lb-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+  width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25);
+  background: rgba(255,255,255,.1); color: #fff; font-size: 18px; cursor: pointer;
+  display: grid; place-items: center; transition: background-color .15s;
+}
+.lb-nav:hover { background: rgba(255,255,255,.25); }
+.lb-prev { left: 16px; }
+.lb-next { right: 16px; }
+.lb-footer { padding: 14px 0 22px; text-align: center; color: rgba(255,255,255,.85); }
+.lb-counter { font-size: 13px; letter-spacing: 1px; }
+.lb-dots { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
+.lb-dot { width: 8px; height: 8px; border-radius: 50%; border: none; background: rgba(255,255,255,.3); cursor: pointer; padding: 0; transition: background-color .15s, transform .15s; }
+.lb-dot.on { background: var(--gold, #E8A53A); transform: scale(1.3); }
+@media (max-width: 640px) { .lb-nav { width: 40px; height: 40px; } .lb-prev { left: 8px; } .lb-next { right: 8px; } }
+
+/* Order cards (My Orders) */
+.order-card {
+  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+  margin-bottom: 18px; overflow: hidden; transition: box-shadow .2s ease;
+}
+.order-card:hover { box-shadow: 0 6px 22px rgba(60, 20, 30, .07); }
+.oc-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 14px 18px; background: var(--cream); border-bottom: 1px solid var(--line);
+}
+.oc-id { font-weight: 700; font-family: monospace; font-size: 13px; color: var(--burgundy); }
+.oc-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.oc-badges { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.oc-items { padding: 6px 18px; }
+.oc-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.oc-item:last-child { border-bottom: none; }
+.oc-thumb {
+  width: 54px; height: 54px; flex: 0 0 54px; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--cream); display: grid; place-items: center;
+}
+.oc-item-meta { flex: 1; min-width: 0; }
+.oc-item-name { font-weight: 600; font-size: 14px; color: var(--ink); text-decoration: none; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oc-item-name:hover { color: var(--burgundy); }
+.oc-item-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.oc-item-total { font-weight: 700; font-size: 14px; }
+.oc-summary { padding: 12px 18px; background: #fdfaf3; border-top: 1px solid var(--line); max-width: 340px; margin-left: auto; }
+.oc-summary .line { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+.oc-summary .line.total { font-weight: 800; color: var(--burgundy); font-size: 15px; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; }
+.oc-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 18px; border-top: 1px solid var(--line); }
+
+/* Loyalty */
+.loyalty-cards { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 14px; margin-top: 16px; }
+@media (max-width: 720px) { .loyalty-cards { grid-template-columns: 1fr; } }
+.loyalty-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+.loyalty-card.main { background: linear-gradient(135deg, var(--burgundy, #7a1f35), #5a1626); color: #f2dd92; border: none; }
+.lc-label { font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; opacity: .8; font-weight: 600; }
+.lc-value { font-size: 2.2rem; font-weight: 800; font-family: Georgia, serif; margin-top: 6px; }
+.loyalty-card:not(.main) .lc-value { color: var(--burgundy); }
+.lc-sub { font-size: 12px; opacity: .85; margin-top: 4px; }
+.loyalty-history { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); }
+.lh-row { display: flex; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid var(--line); }
+.lh-row:last-child { border-bottom: none; }
+.lh-meta { flex: 1; min-width: 0; }
+.lh-title { font-size: 13px; font-weight: 600; }
+.lh-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.lh-points { font-weight: 800; font-size: 15px; }
+
+/* Checkout loyalty box */
+.ck-loyalty {
+  margin-top: 14px; border: 1px solid var(--gold); background: var(--gold-soft);
+  border-radius: 8px; padding: 14px;
+}
+.ck-loyalty h4 { margin: 0 0 6px; font-size: 13px; color: var(--burgundy); display: flex; align-items: center; gap: 8px; }
+.ck-loyalty .row { display: flex; gap: 8px; margin-top: 8px; }
+.ck-loyalty input { flex: 1; }

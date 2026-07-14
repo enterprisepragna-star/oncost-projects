@@ -132,6 +132,38 @@ module.exports = async function handler(req, res) {
     console.error('[ccavenue/response] Skipping DB write — Supabase env or order_id missing.');
   }
 
+  // ============= LOYALTY REFUND + CART CLEANUP =============
+  if (orderRow) {
+    // Refund redeemed points if payment did not succeed (once)
+    if (dbStatus !== 'Paid' && Number(orderRow.loyalty_points_redeemed || 0) > 0 && !orderRow.loyalty_refunded_at && orderRow.user_id) {
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/loyalty_transactions`, {
+          method: 'POST',
+          headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            user_id: orderRow.user_id, order_id: orderRow.id, type: 'refund',
+            points: Number(orderRow.loyalty_points_redeemed),
+            note: `Refund — payment ${dbStatus.toLowerCase()} on order ${orderId}`, created_by: 'system',
+          }),
+        });
+        await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${orderRow.id}`, {
+          method: 'PATCH',
+          headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loyalty_refunded_at: new Date().toISOString() }),
+        });
+        console.log(`[ccavenue/response] refunded ${orderRow.loyalty_points_redeemed} loyalty points (payment ${dbStatus})`);
+      } catch (e) { console.error('[ccavenue/response] loyalty refund failed:', e.message); }
+    }
+    // Server-side cart clear on successful payment (logged-in customers)
+    if (dbStatus === 'Paid' && orderRow.user_id) {
+      fetch(`${SUPABASE_URL}/rest/v1/cart_items?user_id=eq.${orderRow.user_id}`, {
+        method: 'DELETE',
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      }).then(() => console.log('[ccavenue/response] cart cleared for user', orderRow.user_id))
+        .catch(err => console.error('[ccavenue/response] cart clear failed:', err.message));
+    }
+  }
+
   // ============= AUTO-CREATE DELHIVERY AWB ON PAID =============
   if (dbStatus === 'Paid' && orderRow && !orderRow.awb_number && process.env.DELHIVERY_TOKEN) {
     const ADMIN_KEY = process.env.ADMIN_RECOVERY_KEY;
