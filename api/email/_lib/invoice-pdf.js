@@ -191,9 +191,9 @@ async function generateInvoicePDF({ order, products = {}, seller = {} }) {
   y -= 24;
   draw('Notes', M, y, { size: 9, bold: true, color: colors.muted });
   y -= 12;
-  draw('* Goods once sold are non-returnable. Damaged-in-transit claims must be raised within 48 hours of delivery with unboxing video.', M, y, { size: 8, color: colors.muted, maxWidth: W - 2*M });
+  draw('Thank you for shopping with us! For returns or queries, contact support within 7 days of delivery.', M, y, { size: 8, color: colors.muted, maxWidth: W - 2*M });
   y -= 10;
-  draw('* This is a computer-generated invoice - no signature required.', M, y, { size: 8, color: colors.muted });
+  draw('This is a computer-generated invoice - no signature required.', M, y, { size: 8, color: colors.muted });
 
   // Bottom band
   page.drawRectangle({ x: 0, y: 0, width: W, height: 28, color: colors.brand });

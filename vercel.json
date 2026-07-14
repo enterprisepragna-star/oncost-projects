@@ -7,9 +7,11 @@
   "rewrites": [
     { "source": "/api/delhivery/:action", "destination": "/api/delhivery?action=:action" },
     { "source": "/api/whatsapp/:action", "destination": "/api/whatsapp?action=:action" },
+    { "source": "/api/reviews/:action", "destination": "/api/reviews?action=:action" },
     { "source": "/api/admin/:action", "destination": "/api/admin?action=:action" },
     { "source": "/api/store/:action", "destination": "/api/store?action=:action" },
-    { "source": "/api/webhooks/delhivery", "destination": "/api/delhivery?action=webhook" },
+    { "source": "/api/coupons/validate", "destination": "/api/store?action=coupon-validate" },
+    { "source": "/api/ccavenue/:action", "destination": "/api/ccavenue?action=:action" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/search", "destination": "/products.html" },
     { "source": "/about-us", "destination": "/about-us.html" },

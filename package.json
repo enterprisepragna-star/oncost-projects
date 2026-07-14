@@ -8,10 +8,11 @@
     "vercel-build": "echo 'No build needed — static site'"
   },
   "engines": {
-    "node": "24.x"
+    "node": "22.x"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
-    "pdf-lib": "^1.17.1"
+    "pdf-lib": "^1.17.1",
+    "resend": "^6.12.4"
   }
 }

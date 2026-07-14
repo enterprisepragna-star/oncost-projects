@@ -50,8 +50,7 @@
       .inv-body   { padding:22px; }
       .inv-footer { padding:14px 22px; }
     }
-  </style>  <script defer src="/seo.js"></script>
-
+  </style>
 </head>
 <body>
   <div class="topbar"><span><i class="fas fa-check-circle"></i> Payment Status</span></div>
@@ -146,8 +145,10 @@
     }
 
     function renderInvoice(order, biz) {
-      const items = Array.isArray(order.items) ? order.items : [];
-      const ship  = order.shipping_address || {};
+      let items = [];
+      try { items = typeof order.items === 'string' ? JSON.parse(order.items) : (Array.isArray(order.items) ? order.items : []); } catch(e){}
+      let ship = {};
+      try { ship = typeof order.shipping_address === 'string' ? JSON.parse(order.shipping_address) : (order.shipping_address || {}); } catch(e){}
       const subtotal = Number(order.items_subtotal || items.reduce((s, it) => s + Number(it.price || 0) * Number(it.qty || it.quantity || 1), 0));
       const shipping = Number(order.shipping_amount || 0);
       const discount = Number(order.discount_amount || 0);
@@ -181,7 +182,12 @@
         const price = Number(it.price || 0);
         return `<tr>
           <td style="width:32px;color:var(--muted);">${i+1}</td>
-          <td><div style="font-weight:600;">${escapeHTML(it.name || it.product_id || 'Item')}</div>${it.product_id ? '<div style="font-size:11px;color:var(--muted);">SKU: ' + escapeHTML(it.product_id) + '</div>' : ''}</td>
+          <td>
+            <div style="font-weight:600;">${escapeHTML(it.name || it.product_id || 'Item')}</div>
+            ${it.product_id ? '<div style="font-size:11px;color:var(--muted);">SKU: ' + escapeHTML(it.product_id) + '</div>' : ''}
+            ${it.barcode ? '<div style="font-size:11px;color:var(--muted);">Barcode: ' + escapeHTML(it.barcode) + '</div>' : ''}
+            ${it.weight_grams ? '<div style="font-size:11px;color:var(--muted);">Weight: ' + escapeHTML(it.weight_grams) + 'g</div>' : ''}
+          </td>
           <td class="num">${qty}</td>
           <td class="num">${fmtINR(price)}</td>
           <td class="num"><strong>${fmtINR(price * qty)}</strong></td>

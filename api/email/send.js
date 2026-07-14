@@ -5,7 +5,7 @@
 //   types: enquiry_admin_notify | order_confirm | order_invoice | order_shipped |
 //          testimonial_request | custom
 
-const { generateInvoicePDF } = require('./lib/invoice-pdf');
+const { generateInvoicePDF } = require('./_lib/invoice-pdf');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
@@ -15,7 +15,10 @@ module.exports = async function handler(req, res) {
   const REPLY_TO        = (process.env.RESEND_REPLY_TO || '').trim();
   const ADMIN_EMAIL     = (process.env.ADMIN_EMAIL || 'enterprisepragna@gmail.com').trim();
   const ADMIN_KEY       = process.env.ADMIN_RECOVERY_KEY;
-  const SUPABASE_URL    = (process.env.SUPABASE_URL || '').trim();
+  let SUPABASE_URL    = (process.env.SUPABASE_URL || '').trim();
+  if (!SUPABASE_URL.startsWith('http') || SUPABASE_URL.startsWith('sb_')) {
+    SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jyvmmypalshebqmnrdma.supabase.co';
+  }
   const SERVICE_KEY     = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   if (!RESEND_API_KEY) return res.status(500).json({ error: 'RESEND_API_KEY missing in Vercel env' });
 
@@ -33,6 +36,29 @@ module.exports = async function handler(req, res) {
 
   switch (type) {
     case 'enquiry_admin_notify':
+      if (data.save_lead && SUPABASE_URL && SERVICE_KEY) {
+        try {
+          const lRes = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
+            method: 'POST',
+            headers: {
+              apikey: SERVICE_KEY,
+              Authorization: `Bearer ${SERVICE_KEY}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+              user_id: data.user_id || null,
+              product_id: data.product_id || null,
+              summary: data.summary || '',
+              status: 'New'
+            })
+          });
+          if (!lRes.ok) console.error('[email/send] lead insert failed', await lRes.text());
+        } catch (e) {
+          console.error('[email/send] lead insert exception', e.message);
+        }
+      }
+
       recipient = ADMIN_EMAIL;
       subject = `🔔 New enquiry from ${data.name || 'a customer'}`;
       html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">

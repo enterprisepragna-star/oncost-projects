@@ -6,9 +6,9 @@
 //           use ENV-specific tokens). For staging, can use https://staging-express.delhivery.com
 
 const BASE = (process.env.DELHIVERY_BASE_URL || 'https://track.delhivery.com').replace(/\/+$/, '');
-const TOKEN = (process.env.DELHIVERY_TOKEN || '').trim();
-const CLIENT_NAME = (process.env.DELHIVERY_CLIENT_NAME || '').trim();
-const PICKUP_PINCODE = (process.env.DELHIVERY_PICKUP_PINCODE || '').trim();
+const TOKEN = (process.env.DELHIVERY_TOKEN || process.env.DELHIVERY_API_KEY || '').trim();
+const CLIENT_NAME = (process.env.DELHIVERY_CLIENT_NAME || 'ONCOST').trim();
+const PICKUP_PINCODE = (process.env.DELHIVERY_PICKUP_PINCODE || '560001').trim(); // Default fallback, admin must set real one
 
 function authHeader() {
   if (!TOKEN) throw new Error('DELHIVERY_TOKEN not configured in env vars');

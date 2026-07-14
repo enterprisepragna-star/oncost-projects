@@ -285,6 +285,9 @@ ALTER TABLE public.leads
   ADD COLUMN IF NOT EXISTS contacted_at timestamp with time zone,
   ADD COLUMN IF NOT EXISTS resolved_at timestamp with time zone;
 
+DROP POLICY IF EXISTS "Admins can manage leads" ON public.leads;
+CREATE POLICY "Admins can manage leads" ON public.leads FOR ALL USING (auth.email() = 'enterprisepragna@gmail.com');
+
 CREATE INDEX IF NOT EXISTS idx_leads_status     ON public.leads (status);
 CREATE INDEX IF NOT EXISTS idx_leads_created_at ON public.leads (created_at DESC);
 
@@ -299,3 +302,26 @@ CREATE INDEX IF NOT EXISTS idx_leads_created_at ON public.leads (created_at DESC
 -- • Customer complaints table with auto-numbered tickets
 -- • product-images Supabase Storage bucket (replaces imgbb)
 -- ════════════════════════════════════════════════════════════════════
+
+-- =====================================================================
+-- PHASE 2: ENGAGEMENT (WISHLISTS & LOYALTY)
+-- =====================================================================
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS loyalty_points integer DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS public.wishlists (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES auth.users NOT NULL,
+  product_id text NOT NULL,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(user_id, product_id)
+);
+
+ALTER TABLE public.wishlists ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view own wishlist" ON public.wishlists;
+CREATE POLICY "Users can view own wishlist" ON public.wishlists FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert own wishlist" ON public.wishlists;
+CREATE POLICY "Users can insert own wishlist" ON public.wishlists FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can delete own wishlist" ON public.wishlists;
+CREATE POLICY "Users can delete own wishlist" ON public.wishlists FOR DELETE USING (auth.uid() = user_id);

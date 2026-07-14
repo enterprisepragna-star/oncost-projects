@@ -5,7 +5,7 @@
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') { res.status(405).json({ error: 'Method Not Allowed' }); return; }
 
-  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_URL = process.env.SUPABASE_URL?.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://');
   const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!SUPABASE_URL || !SERVICE_KEY) {
     res.status(500).json({ error: 'Supabase not configured.' });

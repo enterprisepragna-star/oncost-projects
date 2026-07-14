@@ -1,8 +1,7 @@
-/* =============================================================
+/* 
    ONCOST Admin Console · admin.js
    Vanilla JS · Supabase JS v2 · Single-file SPA
-   ============================================================= */
-/* global supabaseClient, Chart, Papa, XLSX */
+*/
 'use strict';
 
 const ADMIN_EMAILS = ['enterprisepragna@gmail.com'];
@@ -183,6 +182,7 @@ async function loadSettings() {
     const node = $(`set-${k}`);
     if (node) node.value = state.settings[k] ?? '';
   });
+  renderHeroImagesPreview();
 }
 async function saveSettings() {
   const payload = {};
@@ -193,6 +193,7 @@ async function saveSettings() {
     const node = $(`set-${k}`);
     if (node) payload[k] = k === 'low_stock_threshold' ? (Number(node.value) || 5) : node.value.trim();
   });
+  payload.hero_images = state.settings.hero_images || [];
   let res;
   if (state.settings.id) {
     res = await supabaseClient.from('site_settings').update(payload).eq('id', state.settings.id).select().single();
@@ -209,9 +210,66 @@ async function saveSettings() {
   }
   state.settings = res.data;
   state.imgbbKey = res.data.imgbb_api_key || '';
+  renderHeroImagesPreview();
   showToast('Settings saved.');
 }
 window.saveSettings = saveSettings;
+
+// ------------------------- Hero Images UI -------------------------
+function renderHeroImagesPreview() {
+  const container = $('hero-images-preview');
+  if (!container) return;
+  const images = state.settings.hero_images || [];
+  if (images.length === 0) {
+    container.innerHTML = `<div style="grid-column:1/-1;color:var(--admin-text-mute);font-size:14px;padding:12px;background:#f8f9fa;border-radius:8px;text-align:center;">No hero images uploaded. The gold gradient fallback will be shown.</div>`;
+    return;
+  }
+  container.innerHTML = images.map((url, i) => `
+    <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);aspect-ratio:16/9;">
+      <img src="${escapeHTML(url)}" style="width:100%;height:100%;object-fit:cover;" />
+      <button class="btn btn-icon" style="position:absolute;top:4px;right:4px;background:rgba(255,255,255,0.9);color:var(--admin-danger);min-width:24px;height:24px;padding:0;font-size:12px;" onclick="removeHeroImage(${i})"><i class="fas fa-trash"></i></button>
+    </div>
+  `).join('');
+}
+window.removeHeroImage = async (idx) => {
+  if (!confirm('Remove this hero image?')) return;
+  const images = [...(state.settings.hero_images || [])];
+  images.splice(idx, 1);
+  state.settings.hero_images = images;
+  renderHeroImagesPreview();
+  await saveSettings();
+};
+
+const heroDrop = $('hero-image-drop');
+const heroFile = $('hero-image-file');
+if (heroDrop && heroFile) {
+  heroDrop.addEventListener('click', () => heroFile.click());
+  heroDrop.addEventListener('dragover', e => { e.preventDefault(); heroDrop.style.borderColor = 'var(--admin-primary)'; });
+  heroDrop.addEventListener('dragleave', e => { e.preventDefault(); heroDrop.style.borderColor = 'var(--line)'; });
+  heroDrop.addEventListener('drop', async e => {
+    e.preventDefault(); heroDrop.style.borderColor = 'var(--line)';
+    if (e.dataTransfer.files[0]) handleHeroUpload(e.dataTransfer.files[0]);
+  });
+  heroFile.addEventListener('change', e => {
+    if (e.target.files[0]) handleHeroUpload(e.target.files[0]);
+  });
+}
+async function handleHeroUpload(file) {
+  if (!file.type.startsWith('image/')) return showToast('Images only', 'error');
+  heroDrop.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:24px;color:var(--admin-primary);"></i><div style="margin-top:8px">Uploading...</div>';
+  try {
+    const url = await uploadImage(file);
+    if (!url) throw new Error('Upload returned null');
+    const images = [...(state.settings.hero_images || [])];
+    images.push(url);
+    state.settings.hero_images = images;
+    renderHeroImagesPreview();
+    await saveSettings();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+  heroDrop.innerHTML = '<i class="fas fa-cloud-upload-alt" style="font-size:24px;color:var(--admin-primary);margin-bottom:8px;display:block;"></i><div style="font-weight:500;">Click to browse</div><div style="font-size:12px;color:var(--admin-text-mute)">JPG/PNG/WEBP · max 5 MB</div>';
+}
 
 // ------------------------- Business Profile (for invoice) -------------------------
 const BIZ_FIELDS = ['business_name','legal_name','gstin','pan','address_line1','address_line2','city','state','pincode','country','phone','email','invoice_notes'];
@@ -333,6 +391,81 @@ function renderDashboard() {
         <td>${statusBadge(o.status)}</td>
         <td style="font-size:11px;color:var(--admin-text-mute)">${new Date(o.created_at).toLocaleDateString()}</td>
       </tr>`).join('') + '</tbody></table>';
+  }
+
+  // --- Analytics Charts ---
+  if (window.Chart) {
+    if (window.adminCharts?.revenue) window.adminCharts.revenue.destroy();
+    if (window.adminCharts?.category) window.adminCharts.category.destroy();
+    window.adminCharts = window.adminCharts || {};
+
+    // 1. Revenue Trend (last 30 days)
+    const last30 = [...Array(30)].map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (29 - i));
+      return d.toISOString().split('T')[0];
+    });
+    
+    const revData = last30.map(dateStr => {
+      return state.orders
+        .filter(o => o.created_at.startsWith(dateStr) && o.status !== 'Cancelled')
+        .reduce((s, o) => s + Number(o.total_amount || 0), 0);
+    });
+
+    const revCtx = document.getElementById('revenueChart');
+    if (revCtx) {
+      window.adminCharts.revenue = new Chart(revCtx, {
+        type: 'line',
+        data: {
+          labels: last30.map(d => d.slice(5)), // MM-DD
+          datasets: [{
+            label: 'Revenue (₹)',
+            data: revData,
+            borderColor: '#7A1F35',
+            backgroundColor: 'rgba(122, 31, 53, 0.1)',
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    // 2. Category Sales
+    const catSales = {};
+    state.orders.forEach(o => {
+      if (o.status === 'Cancelled') return;
+      try {
+        const items = typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []);
+        items.forEach(item => {
+          const prod = state.products.find(p => p.id === item.product_id);
+          const cat = prod ? prod.category_id : 'Unknown';
+          catSales[cat] = (catSales[cat] || 0) + (Number(item.price || 0) * Number(item.quantity || 1));
+        });
+      } catch(e){}
+    });
+
+    const catLabels = Object.keys(catSales).map(id => {
+      if (id === 'Unknown') return 'Unknown';
+      const c = state.categories.find(cat => cat.id === id);
+      return c ? c.name : 'Unknown';
+    });
+    const catData = Object.values(catSales);
+
+    const catCtx = document.getElementById('categoryChart');
+    if (catCtx && catData.length > 0) {
+      window.adminCharts.category = new Chart(catCtx, {
+        type: 'doughnut',
+        data: {
+          labels: catLabels,
+          datasets: [{
+            data: catData,
+            backgroundColor: ['#7A1F35', '#D4AF37', '#2C3E50', '#E67E22', '#27AE60', '#8E44AD']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
   }
 
   // Low stock list
@@ -503,15 +636,26 @@ function renderProducts() {
       <td style="text-align:right"><div style="font-weight:600">${fmtINR(p.price)}</div>${offer ? `<div style="font-size:11px;color:var(--admin-primary)">Sale ${fmtINR(p.offer_price)}</div>` : ''}</td>
       <td style="text-align:right"><span class="badge ${stockBadge}">${stock}</span></td>
       <td>${statusBadge(p.status || 'Active')}</td>
-      <td>
+      <td style="position:sticky;right:0;background:#fff;z-index:1;">
         <div class="row-actions">
-          ${p.barcode ? `<button class="icon-btn" onclick="printBarcodeLabel('${escapeHTML(p.id)}')" title="Print barcode label" data-testid="print-barcode-${escapeHTML(p.id)}"><i class="fas fa-print"></i></button>` : ''}
-          <button class="icon-btn" onclick="openProductForm('${escapeHTML(p.id)}')" data-testid="edit-product-${escapeHTML(p.id)}" title="Edit"><i class="fas fa-pen"></i></button>
-          <button class="icon-btn danger" onclick="deleteProduct('${escapeHTML(p.id)}')" data-testid="delete-product-${escapeHTML(p.id)}" title="Delete"><i class="fas fa-trash"></i></button>
+          ${p.barcode ? `<button class="icon-btn product-barcode-btn" data-pid="${escapeHTML(p.id)}" title="Print barcode label" data-testid="print-barcode-${escapeHTML(p.id)}"><i class="fas fa-print"></i></button>` : ''}
+          <button class="icon-btn product-edit-btn" data-pid="${escapeHTML(p.id)}" data-testid="edit-product-${escapeHTML(p.id)}" title="Edit"><i class="fas fa-pen"></i></button>
+          <button class="icon-btn danger product-delete-btn" data-pid="${escapeHTML(p.id)}" data-testid="delete-product-${escapeHTML(p.id)}" title="Delete"><i class="fas fa-trash"></i></button>
         </div>
       </td>
     </tr>`;
   }).join('');
+
+  // Wire action buttons safely via data-pid (avoids escapeHTML encoding issues in onclick)
+  document.querySelectorAll('.product-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => openProductForm(btn.dataset.pid));
+  });
+  document.querySelectorAll('.product-delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteProduct(btn.dataset.pid));
+  });
+  document.querySelectorAll('.product-barcode-btn').forEach(btn => {
+    btn.addEventListener('click', () => printBarcodeLabel(btn.dataset.pid));
+  });
 
   // Wire row checkboxes
   document.querySelectorAll('.product-row-check').forEach(cb => {
@@ -679,6 +823,17 @@ window.printBarcodeLabel = printBarcodeLabel;
 
 function openProductForm(id) {
   const p = id ? state.products.find(x => x.id === id) : null;
+  // If id was given but product not found in local state, fetch from Supabase then retry
+  if (id && !p) {
+    supabaseClient.from('products').select('*').eq('id', id).single().then(({ data, error }) => {
+      if (error || !data) return showToast('Product not found: ' + (error?.message || id), 'error');
+      // Add to local state so form can find it
+      const idx = state.products.findIndex(x => x.id === data.id);
+      if (idx >= 0) state.products[idx] = data; else state.products.unshift(data);
+      openProductForm(id); // retry now that state has the product
+    });
+    return;
+  }
   const isEdit = !!p;
   const formId = 'pf';
   const html = `
@@ -742,15 +897,16 @@ function openProductForm(id) {
         </div>
 
         <div style="margin-top:24px;padding-top:18px;border-top:1px solid var(--admin-border);">
-          <label class="label" style="display:block;margin-bottom:10px;">Additional Gallery Images</label>
+          <label class="label" style="display:block;margin-bottom:6px;">Product Images &nbsp;<span id="${formId}-gallery-count" style="font-size:11px;color:var(--admin-text-mute);font-weight:400;"></span></label>
+          <div style="font-size:12px;color:var(--admin-text-mute);margin-bottom:10px;">Up to 5 images per product. First image is shown as the main photo.</div>
           <div id="${formId}-gallery" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;"></div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input class="input" id="${formId}-gallery_url" placeholder="Paste another image URL" />
-            <button type="button" class="btn btn-secondary btn-sm" id="${formId}-gallery_add_url"><i class="fas fa-plus"></i> Add URL</button>
-            <button type="button" class="btn btn-secondary btn-sm" id="${formId}-gallery_upload_btn"><i class="fas fa-upload"></i> Upload</button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input class="input" id="${formId}-gallery_url" placeholder="Paste image URL…" style="flex:1;min-width:180px;" />
+            <button type="button" class="btn btn-secondary btn-sm" id="${formId}-gallery_add_url"><i class="fas fa-link"></i> Add URL</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="${formId}-gallery_upload_btn"><i class="fas fa-upload"></i> Upload file(s)</button>
             <input type="file" id="${formId}-gallery_file" accept="image/jpeg,image/png,image/webp" hidden multiple />
           </div>
-          <div class="hint" style="margin-top:6px;">Gallery shows on the product detail page. Up to 8 images.</div>
+          <div class="hint" style="margin-top:6px;">JPG / PNG / WEBP · max 5 MB each · max 5 images total.</div>
         </div>
       </div>
 
@@ -867,7 +1023,6 @@ function openProductForm(id) {
   $(`${formId}-barcode`).addEventListener('input', renderBarcodePreview);
   renderBarcodePreview();
 
-  // ============= VARIANTS MANAGEMENT =============
   let variants = [];   // [{ id, variant_type, variant_label, sku, price, stock, weight_grams, image_url, is_default, sort_order }]
   let nextLocalId = 1;
 
@@ -968,7 +1123,12 @@ function openProductForm(id) {
     $(`${formId}-drop-sub`).innerHTML = '<span class="spin"></span> Uploading…';
     try {
       const url = await uploadProductImage(f);
-      $(`${formId}-image_url`).value = url;
+      // Add to gallery (respects max 5 limit)
+      if (gallery.length < MAX_IMAGES) {
+        gallery.push(url);
+        renderGallery();
+      }
+      $(`${formId}-image_url`).value = gallery[0] || url;
       $(`${formId}-img-block`).innerHTML = `<div style="margin-bottom:12px;"><img src="${escapeHTML(url)}" alt="" style="max-width:240px;border-radius:6px;border:1px solid var(--admin-border);" /></div>`;
       $(`${formId}-drop-sub`).textContent = 'Uploaded · ready to save';
       showToast('Image uploaded.');
@@ -981,55 +1141,79 @@ function openProductForm(id) {
   // Save
   $(`${formId}-cancel`).onclick = () => m.close();
 
-  // ---------- Gallery management (reorder · make primary · remove) ----------
+  // ---------- Gallery management (max 5 · reorder · make primary · remove) ----------
+  // Seed gallery from image_urls; also include image_url as first if not already present
   let gallery = Array.isArray(p?.image_urls) ? [...p.image_urls] : [];
+  if (p?.image_url && !gallery.includes(p.image_url)) gallery.unshift(p.image_url);
+
+  const MAX_IMAGES = 5;
+
   function renderGallery() {
     const slot = $(`${formId}-gallery`);
+    const countEl = $(`${formId}-gallery-count`);
     if (!slot) return;
-    if (!gallery.length) { slot.innerHTML = `<div style="color:var(--admin-text-mute);font-size:12px;">No additional images yet. Add up to 8 — customers can browse them on the product page.</div>`; return; }
+    if (countEl) countEl.textContent = `(${gallery.length} / ${MAX_IMAGES})`;
+    if (!gallery.length) {
+      slot.innerHTML = `<div style="color:var(--admin-text-mute);font-size:12px;">No images yet. Upload or paste a URL below.</div>`;
+      return;
+    }
     slot.innerHTML = gallery.map((url, i) => `
-      <div style="position:relative;width:96px;border-radius:6px;overflow:hidden;border:1px solid var(--admin-border);background:var(--admin-muted);" data-testid="pf-gallery-item-${i}">
-        <img src="${escapeHTML(url)}" style="width:96px;height:84px;object-fit:cover;display:block;" onerror="this.style.display='none'" />
+      <div style="position:relative;width:96px;border-radius:6px;overflow:hidden;border:2px solid ${i===0?'var(--admin-primary)':'var(--admin-border)'};background:var(--admin-muted);" title="${i===0?'Main image':'Image '+(i+1)}" data-testid="pf-gallery-item-${i}">
+        <img src="${escapeHTML(url)}" style="width:96px;height:80px;object-fit:cover;display:block;" onerror="this.style.display='none'" />
+        ${i===0?'<div style="position:absolute;top:0;left:0;background:rgba(0,47,167,0.8);color:#fff;font-size:9px;padding:2px 6px;font-weight:600;letter-spacing:0.5px;border-radius:0 0 4px 0;">MAIN</div>':''}
         <div style="display:flex;justify-content:space-between;background:#fff;border-top:1px solid var(--admin-border);">
           <button type="button" data-gmove="${i}:-1" title="Move left" ${i===0?'disabled':''} style="flex:1;border:none;background:none;cursor:pointer;padding:3px 0;font-size:10px;color:var(--admin-text-mute);${i===0?'opacity:.3;':''}"><i class="fas fa-chevron-left"></i></button>
-          <button type="button" data-gstar="${i}" title="Make primary image" style="flex:1;border:none;background:none;cursor:pointer;padding:3px 0;font-size:10px;color:#E8A53A;"><i class="fas fa-star"></i></button>
+          <button type="button" data-gstar="${i}" title="Make main image" ${i===0?'disabled':''} style="flex:1;border:none;background:none;cursor:pointer;padding:3px 0;font-size:10px;color:#E8A53A;${i===0?'opacity:.3;':''}"><i class="fas fa-star"></i></button>
           <button type="button" data-gi="${i}" title="Remove" style="flex:1;border:none;background:none;cursor:pointer;padding:3px 0;font-size:10px;color:var(--admin-error);"><i class="fas fa-trash"></i></button>
           <button type="button" data-gmove="${i}:1" title="Move right" ${i===gallery.length-1?'disabled':''} style="flex:1;border:none;background:none;cursor:pointer;padding:3px 0;font-size:10px;color:var(--admin-text-mute);${i===gallery.length-1?'opacity:.3;':''}"><i class="fas fa-chevron-right"></i></button>
         </div>
       </div>`).join('');
-    slot.querySelectorAll('[data-gi]').forEach(btn => btn.onclick = () => { gallery.splice(parseInt(btn.dataset.gi, 10), 1); renderGallery(); });
+    const syncPrimary = () => { if ($(`${formId}-image_url`)) $(`${formId}-image_url`).value = gallery[0] || ''; };
+    slot.querySelectorAll('[data-gi]').forEach(btn => btn.onclick = () => {
+      gallery.splice(parseInt(btn.dataset.gi, 10), 1);
+      syncPrimary();
+      renderGallery();
+    });
     slot.querySelectorAll('[data-gmove]').forEach(btn => btn.onclick = () => {
       const [i, dir] = btn.dataset.gmove.split(':').map(Number);
       const j = i + dir;
       if (j < 0 || j >= gallery.length) return;
       [gallery[i], gallery[j]] = [gallery[j], gallery[i]];
+      syncPrimary();
       renderGallery();
     });
     slot.querySelectorAll('[data-gstar]').forEach(btn => btn.onclick = () => {
       const i = parseInt(btn.dataset.gstar, 10);
-      const current = $(`${formId}-image_url`).value.trim();
-      const promoted = gallery[i];
-      gallery.splice(i, 1);
-      if (current) gallery.unshift(current);
-      $(`${formId}-image_url`).value = promoted;
-      $(`${formId}-img-block`).innerHTML = `<div style="margin-bottom:12px;"><img src="${escapeHTML(promoted)}" alt="" style="max-width:240px;border-radius:6px;border:1px solid var(--admin-border);" /></div>`;
+      if (i === 0) return;
+      const [promoted] = gallery.splice(i, 1);
+      gallery.unshift(promoted);
+      syncPrimary();
       renderGallery();
-      showToast('Primary image updated. Remember to save.');
+      showToast('Main image updated. Remember to save.');
     });
   }
+
   renderGallery();
+
   $(`${formId}-gallery_add_url`).onclick = () => {
     const u = $(`${formId}-gallery_url`).value.trim();
     if (!u) return;
-    if (gallery.length >= 8) return showToast('Max 8 gallery images.', 'error');
-    gallery.push(u); $(`${formId}-gallery_url`).value = ''; renderGallery();
+    if (gallery.length >= MAX_IMAGES) return showToast(`Max ${MAX_IMAGES} images per product.`, 'error');
+    gallery.push(u);
+    $(`${formId}-gallery_url`).value = '';
+    if (gallery.length === 1 && $(`${formId}-image_url`)) $(`${formId}-image_url`).value = u;
+    renderGallery();
   };
   $(`${formId}-gallery_upload_btn`).onclick = () => $(`${formId}-gallery_file`).click();
   $(`${formId}-gallery_file`).onchange = async (e) => {
     for (const f of Array.from(e.target.files || [])) {
-      if (gallery.length >= 8) break;
-      try { const url = await uploadProductImage(f); gallery.push(url); renderGallery(); }
-      catch (err) { showToast(err.message, 'error'); }
+      if (gallery.length >= MAX_IMAGES) { showToast(`Max ${MAX_IMAGES} images reached.`, 'error'); break; }
+      try {
+        const url = await uploadProductImage(f);
+        gallery.push(url);
+        if (gallery.length === 1 && $(`${formId}-image_url`)) $(`${formId}-image_url`).value = url;
+        renderGallery();
+      } catch (err) { showToast(err.message, 'error'); }
     }
     e.target.value = '';
   };
@@ -1120,7 +1304,13 @@ function openProductForm(id) {
   $(`${formId}-save`).onclick = async () => {
     const name = $(`${formId}-name`).value.trim();
     if (!name) return showToast('Name is required.', 'error');
-    const newId = isEdit ? p.id : slugify(name);
+    const newId = isEdit ? p.id : (slugify($(`${formId}-sku`).value.trim() || name));
+    const primaryImage = $(`${formId}-image_url`).value.trim();
+    const finalImages = [];
+    [primaryImage, ...gallery].forEach(url => {
+      const clean = (url || '').trim();
+      if (clean && !finalImages.includes(clean) && finalImages.length < MAX_IMAGES) finalImages.push(clean);
+    });
     const payload = {
       id: newId, name,
       sku: $(`${formId}-sku`).value.trim() || null,
@@ -1138,8 +1328,8 @@ function openProductForm(id) {
       price: Number($(`${formId}-price`).value) || 0,
       offer_price: $(`${formId}-offer_price`).value ? Number($(`${formId}-offer_price`).value) : null,
       description: $(`${formId}-description`).value.trim() || null,
-      image_url: $(`${formId}-image_url`).value.trim() || null,
-      image_urls: gallery.length ? gallery : null,
+      image_url: finalImages[0] || null,
+      image_urls: finalImages.length ? finalImages : null,
       stock: Number($(`${formId}-stock`).value) || 0,
       seo_title: $(`${formId}-seo_title`).value.trim() || null,
       seo_description: $(`${formId}-seo_description`).value.trim() || null,
@@ -1160,7 +1350,6 @@ function openProductForm(id) {
     }
     if (res.error) return showToast('Save failed: ' + res.error.message, 'error');
 
-    // ============= SAVE VARIANTS =============
     if (payload.has_variants && window.__pf_get_variants) {
       const productId = res.data.id;
       const vList = window.__pf_get_variants();
@@ -1502,7 +1691,8 @@ function renderOrders() {
     return;
   }
   tbody.innerHTML = filtered.map(o => {
-    const items = Array.isArray(o.items) ? o.items : (o.items?.items || []);
+    let items = [];
+    try { items = typeof o.items === 'string' ? JSON.parse(o.items) : (Array.isArray(o.items) ? o.items : (o.items?.items || [])); } catch(e){}
     const qty = items.reduce((s, it) => s + Number(it.qty || it.quantity || 1), 0);
     const ccId = o.ccavenue_order_id || '';
     const invLink = ccId ? `<a href="thank-you.html?status=success&order_id=${encodeURIComponent(ccId)}&tracking_id=${encodeURIComponent(o.payment_tracking_id||'')}&amount=${encodeURIComponent(o.total_amount||'')}" target="_blank" class="icon-btn" title="View / print invoice" data-testid="invoice-btn-${escapeHTML(o.id)}"><i class="fas fa-file-invoice"></i></a>` : '';
@@ -1515,7 +1705,10 @@ function renderOrders() {
       <td><div style="font-size:12px;font-weight:600;color:var(--admin-primary);">${escapeHTML(o.invoice_number || '—')}</div></td>
       <td><div style="font-size:12px">${escapeHTML(o.guest_email || o.user_id || '—')}</div><div style="font-size:11px;color:var(--admin-text-mute)">${escapeHTML(o.guest_phone || '')}</div></td>
       <td style="text-align:right;font-weight:600">${fmtINR(o.total_amount)}</td>
-      <td>${qty} item${qty===1?'':'s'}</td>
+      <td>
+        <div style="font-weight:600">${qty} item${qty===1?'':'s'}</div>
+        <div style="font-size:11px;color:var(--admin-text-mute);margin-top:2px;max-width:180px;">${escapeHTML(items.map(i => { const p=state.products.find(x=>x.id===i.product_id); return p ? p.name : (i.name || 'Product'); }).join(', '))}</div>
+      </td>
       <td>
         <select class="select" style="padding:5px 8px;font-size:12px;min-width:130px;" onchange="updateOrderStatus('${escapeHTML(o.id)}', this.value)" data-testid="order-status-${escapeHTML(o.id)}">
           ${['Processing','Paid','Packed','Shipped','Delivered','Cancelled','Failed'].map(s => `<option ${o.status===s?'selected':''}>${s}</option>`).join('')}
@@ -1574,8 +1767,10 @@ window.updateOrderStatus = updateOrderStatus;
 function viewOrder(id) {
   const o = state.orders.find(x => x.id === id);
   if (!o) return;
-  const items = Array.isArray(o.items) ? o.items : (o.items?.items || []);
-  const ship = o.shipping_address || {};
+  let items = [];
+  try { items = typeof o.items === 'string' ? JSON.parse(o.items) : (Array.isArray(o.items) ? o.items : (o.items?.items || [])); } catch(e){}
+  let ship = {};
+  try { ship = typeof o.shipping_address === 'string' ? JSON.parse(o.shipping_address) : (o.shipping_address || {}); } catch(e){}
   const cc = o.ccavenue_order_id || ('#' + String(o.id).substring(0, 8));
   const totalWeight = items.reduce((s, it) => {
     const prod = state.products.find(p => p.id === it.product_id);
@@ -1734,28 +1929,63 @@ function viewOrder(id) {
   // Generate AWB
   const awbBtn = $('ov-gen-awb');
   if (awbBtn) awbBtn.onclick = async () => {
-    const key = localStorage.getItem('oncost_recover_key') || prompt('Enter your ADMIN_RECOVERY_KEY (from Vercel env):');
-    if (!key) return;
-    awbBtn.disabled = true; awbBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calling Delhivery…';
-    try {
-      const r = await fetch('/api/delhivery/create-shipment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
-        body: JSON.stringify({ order_id: o.id }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'AWB creation failed');
-      localStorage.setItem('oncost_recover_key', key);
-      o.awb_number = j.awb;
-      o.tracking_url = j.tracking_url;
-      showToast(`AWB generated: ${j.awb}`);
-      m.close();
-      viewOrder(o.id);
-      loadOrders().then(() => renderOrders());
-    } catch (err) {
-      showToast(err.message, 'error');
-      awbBtn.disabled = false; awbBtn.innerHTML = '<i class="fas fa-truck"></i> Generate Delhivery AWB';
-    }
+    const dimHtml = `
+      <div id="dim-modal" class="modal" style="display:flex;z-index:9999;">
+        <div class="modal-content" style="max-width:400px;background:#fff;border-radius:8px;padding:24px;">
+          <h3 style="margin-top:0;color:var(--burgundy);"><i class="fas fa-box"></i> Package Dimensions</h3>
+          <p style="font-size:13px;color:var(--admin-text-mute);margin-bottom:16px;">Please confirm the final package details.</p>
+          <div class="field" style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;">Weight (grams)</label><input id="dim-w" type="number" class="input" value="500"></div>
+          <div style="display:flex;gap:10px;margin-bottom:16px;">
+            <div class="field"><label style="font-size:12px;font-weight:600;">Length (cm)</label><input id="dim-l" type="number" class="input" value="10"></div>
+            <div class="field"><label style="font-size:12px;font-weight:600;">Breadth (cm)</label><input id="dim-b" type="number" class="input" value="10"></div>
+            <div class="field"><label style="font-size:12px;font-weight:600;">Height (cm)</label><input id="dim-h" type="number" class="input" value="10"></div>
+          </div>
+          <div style="display:flex;gap:12px;justify-content:flex-end;">
+            <button class="btn btn-secondary" onclick="document.getElementById('dim-modal').remove()">Cancel</button>
+            <button class="btn btn-primary" id="dim-confirm"><i class="fas fa-truck"></i> Confirm & Generate AWB</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', dimHtml);
+
+    $('dim-confirm').onclick = async () => {
+      const weight = parseInt($('dim-w').value) || 500;
+      const length = parseInt($('dim-l').value) || 10;
+      const breadth = parseInt($('dim-b').value) || 10;
+      const height = parseInt($('dim-h').value) || 10;
+      $('dim-modal').remove();
+
+      const key = localStorage.getItem('oncost_recover_key') || prompt('Enter your ADMIN_RECOVERY_KEY (from Vercel env):');
+      if (!key) return;
+
+      awbBtn.disabled = true; awbBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calling Delhivery…';
+      try {
+        const r = await fetch('/api/delhivery/create-shipment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
+          body: JSON.stringify({ 
+            order_id: o.id,
+            weight_grams: weight,
+            length_cm: length,
+            breadth_cm: breadth,
+            height_cm: height
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || 'AWB creation failed');
+        localStorage.setItem('oncost_recover_key', key);
+        o.awb_number = j.awb;
+        o.tracking_url = j.tracking_url;
+        showToast(`AWB generated: ${j.awb}`);
+        m.close();
+        viewOrder(o.id);
+        loadOrders().then(() => renderOrders());
+      } catch (err) {
+        showToast(err.message, 'error');
+        awbBtn.disabled = false; awbBtn.innerHTML = '<i class="fas fa-truck"></i> Generate Delhivery AWB';
+      }
+    };
   };
 
   // Schedule pickup
@@ -1795,6 +2025,57 @@ function viewOrder(id) {
   });
 }
 window.viewOrder = viewOrder;
+
+window.createDelhiveryShipment = async function(id) {
+  const btn = document.getElementById(`btn-delhivery-${id}`);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Generating...'; }
+  
+  let savedKey = localStorage.getItem('oncost_recover_key') || '';
+  if (!savedKey) {
+    savedKey = prompt('Please enter the Admin Recovery Key (found in Vercel environment variables) to authorize Delhivery shipment creation:');
+    if (!savedKey) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-truck"></i> Auto-Generate via Delhivery'; }
+      return;
+    }
+    localStorage.setItem('oncost_recover_key', savedKey);
+  }
+
+  try {
+    const r = await fetch('/api/admin/create-delhivery-shipment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': savedKey },
+      body: JSON.stringify({ order_id: id })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Server error');
+    
+    showToast(`Shipment created! AWB: ${j.awb}`);
+    const o = state.orders.find(x => x.id === id);
+    if (o) {
+      if (!o.shipping_address) o.shipping_address = {};
+      o.shipping_address.tracking_url = j.tracking_url;
+      o.status = 'Packed';
+    }
+    renderOrders();
+    // close modal if open
+    document.getElementById('ov-close')?.click();
+  } catch(err) {
+    showToast(err.message, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-truck"></i> Auto-Generate via Delhivery'; }
+  }
+};
+
+window.saveTrackingUrl = async function(id) {
+  const o = state.orders.find(x => x.id === id); if (!o) return;
+  const url = document.getElementById('ov-tracking-url').value.trim();
+  const ship = o.shipping_address || {};
+  ship.tracking_url = url || null;
+  const { error } = await supabaseClient.from('orders').update({ shipping_address: ship }).eq('id', id);
+  if (error) return showToast('Failed to save tracking: ' + error.message, 'error');
+  o.shipping_address = ship;
+  showToast('Tracking URL saved.');
+  renderOrders();
+};
 
 // ------------------------- Order Delete + Bulk Actions -------------------------
 async function deleteOrder(id) {
@@ -2153,7 +2434,11 @@ function renderLeads() {
       <td style="font-size:12px;text-align:right;">${escapeHTML(d.Qty || d.qty || '—')}</td>
       <td style="font-size:12px;text-align:right;">${d.Budget||d.budget ? '₹'+escapeHTML(d.Budget || d.budget) : '—'}</td>
       <td style="max-width:240px;font-size:12px;color:var(--admin-text-soft);">${escapeHTML((d.Message || d.message || '').substring(0,80))}${(d.Message||d.message||'').length>80?'…':''}</td>
-      <td><span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:${color}20;color:${color};">${escapeHTML(status)}</span></td>
+      <td>
+        <select class="select" style="font-size:11px; padding:3px 6px; width:110px; background:${color}20; color:${color}; font-weight:600; border:1px solid ${color}40;" onchange="updateLeadInline('${escapeHTML(l.id)}', this.value)">
+          ${['New','Contacted','Discussed','Quoted','Accepted','Converted','Not Converted','Lost'].map(s => `<option value="${s}" ${status===s?'selected':''} style="color:#000;background:#fff;">${s}</option>`).join('')}
+        </select>
+      </td>
       <td><div class="row-actions">
         <button class="icon-btn" onclick="viewLead('${escapeHTML(l.id)}')" title="View / Update" data-testid="view-lead-${escapeHTML(l.id)}"><i class="fas fa-eye"></i></button>
         <button class="icon-btn danger" onclick="deleteLead('${escapeHTML(l.id)}')" title="Delete" data-testid="del-lead-${escapeHTML(l.id)}"><i class="fas fa-trash"></i></button>
@@ -2199,13 +2484,21 @@ function viewLead(id) {
       admin_notes: $('lv-notes').value.trim() || null,
       deal_value: Number($('lv-deal-value').value) || null,
     };
-    const { error } = await supabaseClient.from('leads').update(update).eq('id', l.id);
-    if (error) {
-      if (error.message?.includes('status') || error.message?.includes('admin_notes') || error.message?.includes('deal_value')) {
-        return showToast('Run migration_ALL_IN_ONE.sql to enable lead status tracking.', 'error');
-      }
-      return showToast('Save failed: ' + error.message, 'error');
+    
+    const session = await supabaseClient.auth.getSession();
+    const token = session.data?.session?.access_token;
+    
+    const r = await fetch('/api/admin/leads', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ id: l.id, payload: update })
+    });
+    
+    if (!r.ok) {
+      const e = await r.json();
+      return showToast('Save failed: ' + (e.error || 'Unknown error'), 'error');
     }
+    
     Object.assign(l, update);
     renderLeads();
     showToast(`Enquiry → ${update.status}`);
@@ -2214,10 +2507,51 @@ function viewLead(id) {
 }
 window.viewLead = viewLead;
 
+async function updateLeadInline(id, newStatus) {
+  const l = state.leads.find(x => x.id === id);
+  if (!l) return;
+  const oldStatus = l.status;
+  
+  // Optimistic UI update
+  l.status = newStatus;
+  renderLeads();
+  
+  const session = await supabaseClient.auth.getSession();
+  const token = session.data?.session?.access_token;
+  
+  const r = await fetch('/api/admin/leads', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ id: id, payload: { status: newStatus } })
+  });
+  
+  if (!r.ok) {
+    const e = await r.json();
+    l.status = oldStatus;
+    renderLeads();
+    return showToast('Save failed: ' + (e.error || 'Unknown error'), 'error');
+  }
+  showToast(`Enquiry → ${newStatus}`);
+}
+window.updateLeadInline = updateLeadInline;
+
 async function deleteLead(id) {
   if (!await confirmDialog('Delete this enquiry permanently?', { confirmLabel:'Delete', danger:true })) return;
-  const { error } = await supabaseClient.from('leads').delete().eq('id', id);
-  if (error) return showToast('Delete failed: ' + error.message, 'error');
+  
+  const session = await supabaseClient.auth.getSession();
+  const token = session.data?.session?.access_token;
+  
+  const r = await fetch('/api/admin/leads', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ id })
+  });
+  
+  if (!r.ok) {
+    const e = await r.json();
+    return showToast('Delete failed: ' + (e.error || 'Unknown error'), 'error');
+  }
+  
   state.leads = state.leads.filter(x => x.id !== id);
   renderLeads();
   showToast('Enquiry deleted.');

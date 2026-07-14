@@ -215,18 +215,24 @@ function renderHomeCollections() {
   }).join('');
 }
 
-// ---------- Hero slideshow: crossfades through latest product images ----------
+// ---------- Hero slideshow: crossfades through admin-defined hero images or latest products ----------
 function renderHeroSlideshow() {
   const slot = $('.hero-visual');
   if (!slot) return;
-  // Pull up to 6 nice product images (de-duped)
-  const pics = [];
-  const seen = new Set();
-  for (const p of state.products) {
-    const url = p.image_url;
-    if (url && !seen.has(url)) { seen.add(url); pics.push({ url, name: p.name }); }
-    if (pics.length >= 6) break;
+  
+  // 1. Try to pull admin-defined hero images
+  let pics = (state.settings?.hero_images || []).map(url => ({ url, name: 'Hero Image' }));
+  
+  // 2. Fallback: Pull up to 6 nice product images (de-duped) if no custom hero images set
+  if (!pics.length) {
+    const seen = new Set();
+    for (const p of state.products) {
+      const url = p.image_url;
+      if (url && !seen.has(url)) { seen.add(url); pics.push({ url, name: p.name }); }
+      if (pics.length >= 6) break;
+    }
   }
+
   if (!pics.length) return; // keep gradient fallback when no images yet
 
   // Build slide DOM (preserve the existing .hero-kpi badge)
@@ -298,20 +304,14 @@ async function renderProductDetail() {
   if (state.settings.site_title) document.title = `${p.name} · ${state.settings.site_title}`;
   if (p.seo_description) setMeta('description', p.seo_description);
 
-  // Feed seo.js → emits JSON-LD Product schema for Google rich results
-  window.__SEO_PRODUCT = {
-    id: p.id,
-    name: p.name,
-    description: p.seo_description || p.description || '',
-    image_url: p.image_url,
-    images: [p.image_url, ...(Array.isArray(p.image_urls) ? p.image_urls : [])].filter(Boolean),
-    price: p.price,
-    offer_price: p.offer_price,
-    sku: p.sku || p.barcode || p.id,
-    brand: 'ONCOST',
-    in_stock: Number(p.stock || 0) > 0,
-  };
-  window.dispatchEvent(new Event('seo:product-ready'));
+  // --- Track Recently Viewed ---
+  try {
+    let rv = JSON.parse(localStorage.getItem('recently_viewed') || '[]');
+    rv = rv.filter(pid => pid !== p.id);
+    rv.unshift(p.id);
+    if (rv.length > 10) rv = rv.slice(0, 10);
+    localStorage.setItem('recently_viewed', JSON.stringify(rv));
+  } catch(e) {}
 
   // Load variants if this product has them
   let variants = [];
@@ -385,6 +385,17 @@ async function renderProductDetail() {
             </div>
           </div>` : ''}
         ${p.description ? `<p class="desc">${escapeHTML(p.description)}</p>` : ''}
+        
+        <div class="product-specs-table" style="margin:24px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;">
+          <div style="background:#f8f9fa;padding:12px 16px;font-weight:600;font-size:14px;border-bottom:1px solid var(--line);">Product Details</div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            ${(v ? v.sku : p.sku) ? `<tr><td style="padding:10px 16px;border-bottom:1px solid var(--line);color:var(--muted);width:45%;font-weight:500;">SKU</td><td id="pd-spec-sku" style="padding:10px 16px;border-bottom:1px solid var(--line);font-weight:600;">${escapeHTML(v ? v.sku : p.sku)}</td></tr>` : `<tr id="pd-spec-sku-row" style="display:none"><td style="padding:10px 16px;border-bottom:1px solid var(--line);color:var(--muted);width:45%;font-weight:500;">SKU</td><td id="pd-spec-sku" style="padding:10px 16px;border-bottom:1px solid var(--line);font-weight:600;"></td></tr>`}
+            ${(v ? v.weight_grams : p.weight_grams) ? `<tr><td style="padding:10px 16px;border-bottom:1px solid var(--line);color:var(--muted);font-weight:500;">Item Weight</td><td id="pd-spec-weight" style="padding:10px 16px;border-bottom:1px solid var(--line);font-weight:600;">${v ? v.weight_grams : p.weight_grams} Grams</td></tr>` : `<tr id="pd-spec-weight-row" style="display:none"><td style="padding:10px 16px;border-bottom:1px solid var(--line);color:var(--muted);font-weight:500;">Item Weight</td><td id="pd-spec-weight" style="padding:10px 16px;border-bottom:1px solid var(--line);font-weight:600;"></td></tr>`}
+            ${(p.length_cm || p.breadth_cm || p.height_cm) ? `<tr><td style="padding:10px 16px;border-bottom:1px solid var(--line);color:var(--muted);font-weight:500;">Item Dimensions (L x W x H)</td><td style="padding:10px 16px;border-bottom:1px solid var(--line);font-weight:600;">${p.length_cm||0} x ${p.breadth_cm||0} x ${p.height_cm||0} cm</td></tr>` : ''}
+            ${p.hsn_code ? `<tr><td style="padding:10px 16px;border-bottom:1px solid var(--line);color:var(--muted);font-weight:500;">HSN Code</td><td style="padding:10px 16px;border-bottom:1px solid var(--line);font-weight:600;">${escapeHTML(p.hsn_code)}</td></tr>` : ''}
+            ${p.category ? `<tr><td style="padding:10px 16px;color:var(--muted);font-weight:500;">Category</td><td style="padding:10px 16px;font-weight:600;">${escapeHTML(p.category)}</td></tr>` : ''}
+          </table>
+        </div>
         <div class="qty-row">
           <span style="font-weight:600;font-size:13px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Quantity</span>
           <div class="qty-stepper">
@@ -397,9 +408,20 @@ async function renderProductDetail() {
         </div>
         <div class="actions">
           <button class="btn primary" onclick="addToCartFromDetail('${escapeHTML(p.id)}')" ${stock===0?'disabled':''} data-testid="pd-add-cart"><i class="fas fa-cart-plus"></i> Add to Cart</button>
-          <button class="btn outline" onclick="toggleWishlist('${escapeHTML(p.id)}')" data-testid="pd-wishlist"><i class="${inWishlist?'fas':'far'} fa-heart"></i> ${inWishlist?'Saved':'Save'}</button>
+          <button class="btn outline" onclick="toggleWishlist('${escapeHTML(p.id)}')" data-testid="pd-wishlist"><i class="${inWishlist?'fas':'far'} fa-heart"></i> ${inWishlist?'SAVED TO WISHLIST':'ADD TO WISHLIST'}</button>
           <a class="btn secondary" href="bulk.html?product=${encodeURIComponent(p.id)}" data-testid="pd-bulk-enquiry"><i class="fab fa-whatsapp"></i> Bulk Enquiry</a>
         </div>
+        
+        <!-- Pincode Delivery Checker -->
+        <div style="margin:20px 0;padding:16px;border:1px solid var(--line);border-radius:8px;background:#fdfdfd;">
+          <div style="font-weight:600;font-size:14px;margin-bottom:8px;display:flex;align-items:center;gap:6px;"><i class="fas fa-map-marker-alt" style="color:var(--burgundy);"></i> Check Delivery Estimate</div>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="pd-pincode-input" placeholder="Enter Pincode" style="flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:6px;font-size:14px;outline:none;" maxlength="6" />
+            <button class="btn primary sm" onclick="checkDeliveryPincode('${escapeHTML(p.id)}')" id="pd-pincode-btn" style="padding:0 16px;">Check</button>
+          </div>
+          <div id="pd-pincode-result" style="margin-top:10px;font-size:13px;font-weight:500;display:none;"></div>
+        </div>
+
         <div class="pd-perks">
           <div class="perk"><i class="fas fa-truck"></i><div><b>Pan India delivery</b><br><span style="color:var(--muted)">Free shipping over ₹999</span></div></div>
           <div class="perk"><i class="fas fa-box-open"></i><div><b>Premium packaging</b><br><span style="color:var(--muted)">Gift-ready out of the box</span></div></div>
@@ -487,6 +509,23 @@ async function renderProductDetail() {
         const priceEl = $('[data-pd-price]'); if (priceEl) priceEl.textContent = fmtINR(vv.offer_price && vv.offer_price < vv.price ? vv.offer_price : vv.price);
         const oldEl = $('[data-pd-price-old]'); if (oldEl) oldEl.textContent = vv.offer_price && vv.offer_price < vv.price ? fmtINR(vv.price) : '';
         if (vv.image_url) { const main = $('#pd-main-img'); if (main) main.src = vv.image_url; }
+        
+        // Update product details table for variant
+        const skuNode = $('#pd-spec-sku');
+        const skuRow = $('#pd-spec-sku-row');
+        if (skuNode) {
+          const finalSku = vv.sku || p.sku;
+          skuNode.textContent = finalSku || '';
+          if (skuRow) skuRow.style.display = finalSku ? 'table-row' : 'none';
+        }
+        
+        const wNode = $('#pd-spec-weight');
+        const wRow = $('#pd-spec-weight-row');
+        if (wNode) {
+          const finalW = vv.weight_grams || p.weight_grams;
+          wNode.textContent = finalW ? `${finalW} Grams` : '';
+          if (wRow) wRow.style.display = finalW ? 'table-row' : 'none';
+        }
       });
     });
   }
@@ -644,7 +683,7 @@ function cartTotals() {
     else discount = state.appliedCoupon.discount_value;
     discount = Math.min(discount, subtotal);
   }
-  const shipping = subtotal > 999 || subtotal === 0 ? 0 : 79;
+  const shipping = 0; // Live calculated at checkout
   const total = Math.max(0, subtotal - discount + shipping);
   return { subtotal, discount, shipping, total };
 }
@@ -688,7 +727,7 @@ function renderCart() {
         <h3>Order Summary</h3>
         <div class="line"><span>Subtotal</span><span>${fmtINR(subtotal)}</span></div>
         ${discount > 0 ? `<div class="line" style="color:var(--success);"><span>Discount (${escapeHTML(state.appliedCoupon.code)})</span><span>−${fmtINR(discount)}</span></div>` : ''}
-        <div class="line"><span>Shipping</span><span>${shipping === 0 ? 'Free' : fmtINR(shipping)}</span></div>
+        <div class="line"><span>Shipping</span><span style="font-size:12px;color:var(--muted);">${subtotal > 999 ? 'Free' : 'Calculated at checkout'}</span></div>
         <div class="line total"><span>Total</span><span>${fmtINR(total)}</span></div>
 
         <div class="coupon">
@@ -713,18 +752,21 @@ window.applyCoupon = async function() {
   const msgEl = $('#coupon-msg');
   if (!code) return;
   try {
-    const { data } = await supabaseClient.from('coupons').select('*').ilike('code', code).limit(1);
-    if (!data || !data.length) { msgEl.textContent = 'Invalid coupon code'; msgEl.className = 'coupon-msg err'; return; }
-    const c = data[0];
-    if (c.expires_at && new Date(c.expires_at) < new Date()) { msgEl.textContent = 'This coupon has expired'; msgEl.className = 'coupon-msg err'; return; }
-    if (c.usage_limit && c.used_count >= c.usage_limit) { msgEl.textContent = 'Coupon usage limit reached'; msgEl.className = 'coupon-msg err'; return; }
     const { subtotal } = cartTotals();
-    if (c.min_order_amount && subtotal < c.min_order_amount) {
-      msgEl.textContent = `Minimum order ${fmtINR(c.min_order_amount)} required`; msgEl.className = 'coupon-msg err'; return;
+    const r = await fetch('/api/coupons/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, cartSubtotal: subtotal })
+    });
+    const res = await r.json();
+    if (!r.ok || !res.valid) {
+      msgEl.textContent = res.error || 'Invalid coupon';
+      msgEl.className = 'coupon-msg err';
+      return;
     }
-    state.appliedCoupon = c;
+    state.appliedCoupon = res.coupon;
     renderCart();
-    toast(`Coupon ${c.code} applied`, 'ok');
+    toast(`Coupon ${res.coupon.code} applied`, 'ok');
   } catch (e) {
     msgEl.textContent = 'Could not validate coupon';
     msgEl.className = 'coupon-msg err';
@@ -956,7 +998,7 @@ async function renderAccount() {
     return;
   }
   const tab = param('tab') || 'orders';
-  let orders = [], leads = [], loyaltyTxns = [];
+  let orders = [], leads = [], loyaltyTxns = [], addresses = [], offers = [];
   // Match orders by user_id OR by email (so guest orders placed BEFORE signup also appear)
   try {
     const r = await supabaseClient
@@ -977,6 +1019,12 @@ async function renderAccount() {
       if (prof) state.profile = prof;
     } catch { /* ignore */ }
   }
+  if (tab === 'addresses') {
+    try { const r = await supabaseClient.from('addresses').select('*').eq('user_id', state.user.id).order('is_default', { ascending: false }).order('created_at', { ascending: false }); addresses = r.data || []; } catch { /* ignore */ }
+  }
+  if (tab === 'offers') {
+    try { const r = await supabaseClient.from('coupons').select('*').or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).order('created_at', { ascending: false }); offers = r.data || []; } catch { /* ignore */ }
+  }
 
   slot.innerHTML = `
     <div class="account-grid">
@@ -988,7 +1036,9 @@ async function renderAccount() {
         <button class="${tab==='orders'?'active':''}" onclick="location.href='account.html?tab=orders'" data-testid="acct-tab-orders"><i class="fas fa-receipt"></i> My Orders</button>
         <button class="${tab==='loyalty'?'active':''}" onclick="location.href='account.html?tab=loyalty'" data-testid="acct-tab-loyalty"><i class="fas fa-coins"></i> Loyalty Points ${Number(state.profile?.loyalty_points||0) > 0 ? `<span style="margin-left:auto;background:var(--gold);color:var(--burgundy);padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;">${Number(state.profile.loyalty_points)}</span>` : ''}</button>
         <button class="${tab==='wishlist'?'active':''}" onclick="location.href='account.html?tab=wishlist'" data-testid="acct-tab-wishlist"><i class="fas fa-heart"></i> Wishlist ${state.wishlist.length ? `<span style="margin-left:auto;background:var(--burgundy);color:#fff;padding:1px 7px;border-radius:10px;font-size:11px;">${state.wishlist.length}</span>` : ''}</button>
+        <button class="${tab==='offers'?'active':''}" onclick="location.href='account.html?tab=offers'" data-testid="acct-tab-offers"><i class="fas fa-ticket"></i> Offers</button>
         <button class="${tab==='enquiries'?'active':''}" onclick="location.href='account.html?tab=enquiries'" data-testid="acct-tab-enquiries"><i class="fas fa-envelope"></i> Enquiries</button>
+        <button class="${tab==='addresses'?'active':''}" onclick="location.href='account.html?tab=addresses'" data-testid="acct-tab-addresses"><i class="fas fa-map-marker-alt"></i> Addresses</button>
         <button class="${tab==='profile'?'active':''}" onclick="location.href='account.html?tab=profile'" data-testid="acct-tab-profile"><i class="fas fa-user"></i> Profile</button>
         <button onclick="location.href='support.html'" data-testid="acct-tab-support"><i class="fas fa-headset"></i> Support</button>
         ${state.isAdmin ? `<button onclick="location.href='admin-dashboard.html'" style="color:var(--gold);font-weight:700;border-top:1px solid var(--line);margin-top:8px;padding-top:14px;"><i class="fas fa-shield-halved"></i> Admin Console</button>` : ''}
@@ -998,9 +1048,35 @@ async function renderAccount() {
         ${tab === 'orders' ? renderAccountOrders(orders) : ''}
         ${tab === 'loyalty' ? renderAccountLoyalty(loyaltyTxns) : ''}
         ${tab === 'wishlist' ? renderAccountWishlist() : ''}
+        ${tab === 'offers' ? renderAccountOffers(offers) : ''}
         ${tab === 'enquiries' ? renderAccountLeads(leads) : ''}
+        ${tab === 'addresses' ? renderAccountAddresses(addresses) : ''}
         ${tab === 'profile' ? renderAccountProfile() : ''}
       </main>
+    </div>
+  `;
+}
+
+function renderAccountOffers(offers) {
+  if (!offers.length) return `<h2>Active Offers</h2><div class="empty-state"><i class="fas fa-ticket"></i><h3>No active offers</h3><p>There are no discount codes currently available.</p></div>`;
+  
+  return `<h2>Active Offers</h2>
+    <div style="display:grid;gap:16px;margin-top:16px;">
+      ${offers.map(c => `
+        <div style="border:1px dashed var(--gold);background:var(--champagne);padding:16px;border-radius:8px;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-weight:700;color:var(--burgundy);font-size:18px;margin-bottom:4px;">Save ${c.discount_type === 'percent' ? escapeHTML(c.discount_value) + '%' : '₹' + escapeHTML(c.discount_value)}</div>
+            <div style="font-size:13px;color:var(--text);">
+              ${c.min_order_amount ? `On minimum order of ₹${escapeHTML(c.min_order_amount)}.` : 'Applicable on all orders.'}
+              ${c.expires_at ? `Expires: ${new Date(c.expires_at).toLocaleDateString()}` : ''}
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+            <div style="font-family:monospace;background:#fff;border:1px solid var(--gold);padding:6px 12px;border-radius:4px;font-size:16px;font-weight:700;color:var(--burgundy);letter-spacing:1px;">${escapeHTML(c.code)}</div>
+            <button class="btn outline btn-sm" onclick="copyCoupon('${escapeHTML(c.code)}')"><i class="far fa-copy"></i> Copy Code</button>
+          </div>
+        </div>
+      `).join('')}
     </div>
   `;
 }
@@ -1028,8 +1104,10 @@ function renderAccountOrders(orders) {
   state._accountOrders = orders;
   return `<h2>My Orders <span style="font-size:14px;color:var(--muted);font-weight:400;">· ${orders.length} order${orders.length===1?'':'s'}</span></h2>
   ${orders.map(o => {
-    const items = Array.isArray(o.items) ? o.items : [];
+    let items = [];
+    try { items = typeof o.items === 'string' ? JSON.parse(o.items) : (Array.isArray(o.items) ? o.items : []); } catch (e) { items = []; }
     const displayId = o.ccavenue_order_id || ('#' + String(o.id).substring(0, 8));
+    const awb = o.awb_number || o.shipping_awb || '';
     const canCancel = CANCELLABLE_STATUSES.includes(o.status);
     const isPaid = o.payment_status === 'Paid' || o.status === 'Paid' || ['Shipped','Delivered','Packed'].includes(o.status);
     const subtotal = Number(o.items_subtotal || 0);
@@ -1050,7 +1128,7 @@ function renderAccountOrders(orders) {
           <div class="oc-item-sub">${fmtINR(price)} × ${qty}</div>
         </div>
         <div class="oc-item-total">${fmtINR(price * qty)}</div>
-        ${o.status === 'Delivered' && it.product_id ? `<a class="btn ghost sm" href="product.html?id=${encodeURIComponent(it.product_id)}#reviews" title="Rate this product" data-testid="order-rate-btn"><i class="fas fa-star"></i> Rate</a>` : ''}
+        ${o.status === 'Delivered' && it.product_id ? `<button class="btn ghost sm" onclick="${typeof openFeedbackModal === 'function' ? `openFeedbackModal('${escapeHTML(String(o.id))}','${escapeHTML(it.product_id)}','${escapeHTML(it.name || '')}')` : `location.href='product.html?id=${encodeURIComponent(it.product_id)}#reviews'`}" title="Rate this product" data-testid="order-rate-btn"><i class="fas fa-star"></i> Rate</button>` : ''}
       </div>`;
     }).join('') : `<div style="padding:14px;color:var(--muted);font-size:13px;">Item details unavailable for this order.</div>`;
 
@@ -1063,7 +1141,7 @@ function renderAccountOrders(orders) {
         <div class="oc-badges">
           ${orderBadge(o.status)}
           ${o.payment_status && o.payment_status !== o.status ? `<span style="font-size:11px;color:var(--muted);">Payment: ${escapeHTML(o.payment_status)}</span>` : ''}
-          ${o.awb_number ? `<span style="font-size:11px;color:var(--muted);">AWB: ${escapeHTML(o.awb_number)}</span>` : ''}
+          ${awb ? `<span style="font-size:11px;color:var(--muted);">AWB: ${escapeHTML(awb)}</span>` : ''}
         </div>
       </header>
       <div class="oc-items">${itemRows}</div>
@@ -1076,7 +1154,7 @@ function renderAccountOrders(orders) {
       </div>
       <footer class="oc-actions">
         ${isPaid ? `<a class="btn outline sm" href="/api/store/invoice-pdf?order_id=${encodeURIComponent(o.ccavenue_order_id || o.id)}&email=${encodeURIComponent(o.guest_email || state.user.email)}" data-testid="order-invoice-btn"><i class="fas fa-file-arrow-down"></i> Invoice</a>` : ''}
-        ${o.tracking_url ? `<a class="btn outline sm" href="${escapeHTML(o.tracking_url)}" target="_blank" rel="noopener" data-testid="order-track-btn"><i class="fas fa-truck-fast"></i> Track</a>` : (o.awb_number ? `<a class="btn outline sm" href="https://www.delhivery.com/track-v2/package/${escapeHTML(o.awb_number)}" target="_blank" rel="noopener" data-testid="order-track-btn"><i class="fas fa-truck-fast"></i> Track</a>` : '')}
+        ${o.tracking_url ? `<a class="btn outline sm" href="${escapeHTML(o.tracking_url)}" target="_blank" rel="noopener" data-testid="order-track-btn"><i class="fas fa-truck-fast"></i> Track</a>` : (awb ? `<a class="btn outline sm" href="https://www.delhivery.com/track-v2/package/${escapeHTML(awb)}" target="_blank" rel="noopener" data-testid="order-track-btn"><i class="fas fa-truck-fast"></i> Track</a>` : '')}
         ${items.length ? `<button class="btn outline sm" onclick="buyAgain('${escapeHTML(String(o.id))}')" data-testid="order-buyagain-btn"><i class="fas fa-rotate-right"></i> Buy Again</button>` : ''}
         ${canCancel ? `<button class="btn ghost sm" style="color:var(--error);" onclick="cancelMyOrder('${escapeHTML(String(o.id))}')" data-testid="order-cancel-btn"><i class="fas fa-ban"></i> Cancel</button>` : ''}
         <a class="btn ghost sm" href="support.html?order_id=${encodeURIComponent(o.ccavenue_order_id || o.id)}" data-testid="order-support-btn"><i class="fas fa-headset"></i> Help</a>
@@ -1174,13 +1252,145 @@ function renderAccountLeads(leads) {
 }
 function renderAccountProfile() {
   const p = state.profile || {};
+  const loyaltyPts = Number(p.loyalty_points || 0);
   return `<h2>Profile</h2>
+    <div style="background:linear-gradient(135deg, var(--burgundy), #4a001a);color:#fff;padding:20px;border-radius:10px;margin-bottom:24px;max-width:480px;display:flex;align-items:center;gap:16px;">
+      <div style="background:rgba(255,255,255,0.2);width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;">
+        <i class="fas fa-crown"></i>
+      </div>
+      <div>
+        <div style="font-size:13px;opacity:0.9;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Loyalty Points</div>
+        <div style="font-size:28px;font-weight:700;">${loyaltyPts}</div>
+        ${loyaltyPts > 0 ? '<div style="font-size:12px;opacity:0.8;margin-top:2px;">Equivalent to ₹' + loyaltyPts + ' discount</div>' : ''}
+      </div>
+    </div>
     <div style="display:grid;gap:14px;max-width:480px;">
       <label>Name <input id="prof-name" class="field" value="${escapeHTML(p.name||'')}" /></label>
       <label>Phone <input id="prof-phone" class="field" value="${escapeHTML(p.phone||'')}" /></label>
       <button class="btn primary" onclick="saveProfile()" style="justify-self:start;"><i class="fas fa-save"></i> Save</button>
     </div>`;
 }
+
+function renderAccountAddresses(addresses) {
+  state.addresses = addresses; // Save to state for edit modal
+  let html = `<h2>Saved Addresses</h2>`;
+  if (!addresses.length) {
+    html += `<div class="empty-state"><i class="fas fa-map-location-dot"></i><h3>No addresses saved</h3><p>Save an address to checkout faster next time.</p></div>`;
+  } else {
+    html += `<div style="display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));">
+      ${addresses.map(a => `
+        <div style="border:1px solid var(--line);border-radius:6px;padding:16px;position:relative;">
+          ${a.is_default ? '<span style="position:absolute;top:10px;right:10px;background:var(--burgundy);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;">Default</span>' : ''}
+          <div style="font-weight:600;margin-bottom:4px;">${escapeHTML(a.name)}</div>
+          <div style="font-size:13px;color:var(--muted);line-height:1.4;">
+            ${escapeHTML(a.address)}<br/>
+            ${escapeHTML(a.city)}, ${escapeHTML(a.state)} - ${escapeHTML(a.zip)}<br/>
+            Phone: ${escapeHTML(a.phone)}<br/>
+            ${a.email ? `Email: ${escapeHTML(a.email)}` : ''}
+          </div>
+          <div style="margin-top:10px;display:flex;gap:10px;">
+            <button class="btn outline btn-sm" onclick="editAddress('${a.id}')"><i class="fas fa-edit"></i> Edit</button>
+            <button class="btn outline btn-sm" onclick="deleteAddress('${a.id}')"><i class="fas fa-trash"></i> Delete</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+  }
+  html += `<button class="btn primary" style="margin-top:16px;" onclick="editAddress(null)"><i class="fas fa-plus"></i> Add New Address</button>`;
+  
+  // Add modal for editing
+  html += `
+  <dialog id="addr-modal" style="border:none;border-radius:8px;padding:24px;max-width:400px;width:90%;box-shadow:0 10px 30px rgba(0,0,0,0.2);">
+    <h3 id="addr-title" style="margin-top:0;">Add Address</h3>
+    <input type="hidden" id="addr-id" />
+    <div style="display:grid;gap:10px;margin:16px 0;">
+      <label>Full Name <input class="field" id="addr-name" required /></label>
+      <label>Email <input class="field" id="addr-email" type="email" /></label>
+      <label>Phone <input class="field" id="addr-phone" required /></label>
+      <label>Address <textarea class="field" id="addr-street" rows="2" required></textarea></label>
+      <div style="display:flex;gap:10px;">
+        <label style="flex:1">City <input class="field" id="addr-city" required /></label>
+        <label style="flex:1">State <input class="field" id="addr-state" required /></label>
+      </div>
+      <label>ZIP/PIN Code <input class="field" id="addr-zip" required /></label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;">
+        <input type="checkbox" id="addr-default" /> Set as default shipping address
+      </label>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn outline" onclick="document.getElementById('addr-modal').close()">Cancel</button>
+      <button class="btn primary" onclick="saveAddress()">Save Address</button>
+    </div>
+  </dialog>
+  `;
+  return html;
+}
+
+window.editAddress = function(id) {
+  const m = document.getElementById('addr-modal');
+  let a = {};
+  if (id) {
+    a = state.addresses.find(x => x.id === id) || {};
+    document.getElementById('addr-title').innerText = 'Edit Address';
+  } else {
+    document.getElementById('addr-title').innerText = 'Add Address';
+  }
+  document.getElementById('addr-id').value = a.id || '';
+  document.getElementById('addr-name').value = a.name || '';
+  document.getElementById('addr-email').value = a.email || '';
+  document.getElementById('addr-phone').value = a.phone || '';
+  document.getElementById('addr-street').value = a.address || '';
+  document.getElementById('addr-city').value = a.city || '';
+  document.getElementById('addr-state').value = a.state || '';
+  document.getElementById('addr-zip').value = a.zip || '';
+  document.getElementById('addr-default').checked = !!a.is_default;
+  m.showModal();
+};
+
+window.saveAddress = async function() {
+  const id = document.getElementById('addr-id').value;
+  const is_default = document.getElementById('addr-default').checked;
+  const payload = {
+    user_id: state.user.id,
+    name: document.getElementById('addr-name').value,
+    email: document.getElementById('addr-email').value,
+    phone: document.getElementById('addr-phone').value,
+    address: document.getElementById('addr-street').value,
+    city: document.getElementById('addr-city').value,
+    state: document.getElementById('addr-state').value,
+    zip: document.getElementById('addr-zip').value,
+    is_default
+  };
+  
+  if (!payload.name || !payload.phone || !payload.address || !payload.city || !payload.state || !payload.zip) {
+    return toast('Please fill all required fields', 'err');
+  }
+
+  // If this is set to default, unset others first
+  if (is_default) {
+    await supabaseClient.from('addresses').update({ is_default: false }).eq('user_id', state.user.id).neq('id', id || '00000000-0000-0000-0000-000000000000');
+  }
+
+  let res;
+  if (id) {
+    res = await supabaseClient.from('addresses').update(payload).eq('id', id);
+  } else {
+    res = await supabaseClient.from('addresses').insert(payload);
+  }
+  
+  if (res.error) return toast('Save failed: ' + res.error.message, 'err');
+  toast('Address saved', 'ok');
+  document.getElementById('addr-modal').close();
+  renderAccount(); // Refresh
+};
+
+window.deleteAddress = async function(id) {
+  if (!confirm('Are you sure you want to delete this address?')) return;
+  const { error } = await supabaseClient.from('addresses').delete().eq('id', id);
+  if (error) return toast('Delete failed: ' + error.message, 'err');
+  toast('Address deleted', 'ok');
+  renderAccount();
+};
 window.saveProfile = async function() {
   const payload = { id: state.user.id, name: $('#prof-name').value, phone: $('#prof-phone').value };
   const { data, error } = await supabaseClient.from('profiles').upsert(payload).select().single();
@@ -1211,18 +1421,22 @@ function setupEnquiryForm() {
     };
     const summary = `Name: ${data.name} | Email: ${data.email} | Phone: ${data.phone} | GSTIN: ${data.gstin||'—'} | Event: ${data.event} | Qty: ${data.qty} | Date: ${data.date||'—'} | Budget: ${data.budget||'—'} | Message: ${data.message||'—'}`;
     try {
-      await supabaseClient.from('leads').insert({
-        user_id: state.user?.id || null,
-        product_id: param('product') || null,
-        summary,
-        status: 'New',
-      });
-      // Fire admin notification email (non-blocking)
-      fetch('/api/email/send', {
+      // Delegate both insertion (via service role to bypass RLS) and email sending to the secure backend endpoint
+      const r = await fetch('/api/email/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'enquiry_admin_notify', data }),
-      }).catch(() => {/* silent fail — lead is already saved */});
+        body: JSON.stringify({ 
+          type: 'enquiry_admin_notify', 
+          data: {
+            ...data,
+            save_lead: true,
+            user_id: state.user?.id || null,
+            product_id: param('product') || null,
+            summary
+          } 
+        }),
+      });
+      if (!r.ok) throw new Error('Could not submit enquiry');
       toast('Enquiry sent — we will reach out soon!', 'ok');
       form.reset();
     } catch (err) { toast('Failed: ' + err.message, 'err'); }
@@ -1262,6 +1476,110 @@ async function toggleWishlist(productId) {
 }
 window.toggleWishlist = toggleWishlist;
 
+// ---------- Offers Popup ----------
+async function fetchAndRenderOffers() {
+  const popup = $('#offers-popup');
+  if (!popup || sessionStorage.getItem('offers_closed')) return;
+
+  try {
+    const now = new Date().toISOString();
+    const { data } = await supabaseClient.from('coupons')
+      .select('*')
+      .or(`expires_at.is.null,expires_at.gt.${now}`)
+      .order('created_at', { ascending: false });
+
+    if (!data || !data.length) return;
+
+    const list = $('#offers-list');
+    list.innerHTML = data.map(c => `
+      <div style="border:1px dashed var(--gold);background:var(--champagne);padding:12px;border-radius:8px;position:relative;">
+        <div style="font-weight:700;color:var(--burgundy);display:flex;align-items:center;gap:6px;font-size:16px;">
+          <i class="fas fa-ticket"></i> ${escapeHTML(c.code)}
+          <button onclick="copyCoupon('${escapeHTML(c.code)}')" title="Copy Code" style="background:none;border:none;color:var(--burgundy);cursor:pointer;margin-left:auto;font-size:16px;padding:4px;"><i class="far fa-copy"></i></button>
+        </div>
+        <div style="font-size:13px;color:var(--text);margin-top:6px;">
+          Save ${c.discount_type === 'percent' ? escapeHTML(c.discount_value) + '%' : '₹' + escapeHTML(c.discount_value)}${c.min_order_amount ? ` on orders above ₹${escapeHTML(c.min_order_amount)}` : ''}!
+        </div>
+        ${c.expires_at ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;"><i class="far fa-clock"></i> Expires: ${new Date(c.expires_at).toLocaleDateString()}</div>` : ''}
+      </div>
+    `).join('');
+
+    setTimeout(() => popup.show(), 2000);
+  } catch(e) { console.error('Error fetching offers:', e); }
+}
+
+window.copyCoupon = function(code) {
+  navigator.clipboard.writeText(code);
+  toast('Coupon code copied: ' + code, 'ok');
+};
+
+// ---------- Feedback Modal ----------
+window.openFeedbackModal = function(orderId, productId, productName) {
+  const modalHtml = `
+    <div id="feedback-modal" class="modal" style="display:flex;">
+      <div class="modal-content" style="max-width:400px;text-align:center;">
+        <h3>Rate ${escapeHTML(productName)}</h3>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">How was your experience with this product?</p>
+        <div id="star-rating" style="font-size:24px;color:#ccc;cursor:pointer;margin-bottom:16px;display:flex;justify-content:center;gap:8px;">
+          <i class="fas fa-star" data-val="1"></i>
+          <i class="fas fa-star" data-val="2"></i>
+          <i class="fas fa-star" data-val="3"></i>
+          <i class="fas fa-star" data-val="4"></i>
+          <i class="fas fa-star" data-val="5"></i>
+        </div>
+        <textarea id="feedback-text" class="textarea" placeholder="Tell us more about it..." rows="3"></textarea>
+        <div style="display:flex;gap:12px;margin-top:20px;justify-content:center;">
+          <button class="btn outline" onclick="document.getElementById('feedback-modal').remove()">Cancel</button>
+          <button class="btn primary" onclick="submitFeedback('${escapeHTML(orderId)}', '${escapeHTML(productId)}')">Submit Review</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  
+  let currentRating = 0;
+  const stars = document.querySelectorAll('#star-rating .fa-star');
+  stars.forEach(star => {
+    star.addEventListener('click', (e) => {
+      currentRating = parseInt(e.target.dataset.val);
+      stars.forEach(s => {
+        s.style.color = parseInt(s.dataset.val) <= currentRating ? 'var(--gold)' : '#ccc';
+      });
+      document.getElementById('feedback-modal').dataset.rating = currentRating;
+    });
+  });
+};
+
+window.submitFeedback = async function(orderId, productId) {
+  const modal = document.getElementById('feedback-modal');
+  const rating = parseInt(modal.dataset.rating || 0);
+  const text = document.getElementById('feedback-text').value.trim();
+  
+  if (!rating) return toast('Please select a star rating', 'error');
+  if (!text) return toast('Please enter your review', 'error');
+  
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) return toast('Please login first', 'error');
+
+  const { error } = await supabaseClient.from('testimonials').insert([{
+    user_id: session.user.id,
+    customer_name: session.user.user_metadata?.full_name || 'Customer',
+    rating: rating,
+    review_text: text,
+    product_id: productId,
+    order_id: orderId,
+    status: 'Pending'
+  }]);
+
+  if (error) {
+    console.error(error);
+    return toast('Error submitting feedback. You might have already reviewed this.', 'error');
+  }
+
+  toast('Thank you for your review!', 'ok');
+  modal.remove();
+};
+
 // ---------- Boot ----------
 async function bootstrap() {
   await Promise.all([loadAuth(), loadSettings(), loadSaleEvents(), loadCategories(), loadProducts(), loadTestimonials()]);
@@ -1285,6 +1603,49 @@ async function bootstrap() {
   renderCart();
   await renderAccount();
   setupEnquiryForm();
+  fetchAndRenderOffers();
+  renderRecentlyViewed();
+function renderRecentlyViewed() {
+  const slot = $('[data-recently-viewed]');
+  if (!slot) return;
+  try {
+    const rv = JSON.parse(localStorage.getItem('recently_viewed') || '[]');
+    if (!rv.length) { slot.innerHTML = ''; return; }
+    const items = rv.map(id => state.products.find(p => p.id === id)).filter(Boolean);
+    if (!items.length) { slot.innerHTML = ''; return; }
+    
+    const currentProductId = param('id');
+    const displayItems = items.filter(p => p.id !== currentProductId).slice(0, 4);
+    if (!displayItems.length) { slot.innerHTML = ''; return; }
+
+    slot.innerHTML = `
+      <section style="margin-top: 40px; padding: 0 5%;">
+        <h2 style="font-size: 24px; font-weight: 600; margin-bottom: 20px;">Recently Viewed By You</h2>
+        <div class="product-grid">
+          ${displayItems.map(p => {
+            const offer = p.offer_price && p.offer_price < p.price;
+            const inWishlist = state.wishlist.some(w => w.product_id === p.id);
+            const wishBtn = state.user ? `<button class="wish-btn ${inWishlist?'on':''}" onclick="event.preventDefault();event.stopPropagation();toggleWishlist('${escapeHTML(p.id)}')"><i class="${inWishlist?'fas':'far'} fa-heart"></i></button>` : '';
+            return `
+            <a href="product.html?id=${p.id}" class="product-card">
+              <div class="product-img">
+                <img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}" loading="lazy" />
+                ${wishBtn}
+                ${offer ? `<span class="badge save">Save ${Math.round(((p.price - p.offer_price)/p.price)*100)}%</span>` : ''}
+              </div>
+              <div class="product-info">
+                <h3>${escapeHTML(p.name)}</h3>
+                <div class="price">
+                  ${offer ? `<span>${fmtINR(p.offer_price)}</span> <del>${fmtINR(p.price)}</del>` : `<span>${fmtINR(p.price)}</span>`}
+                </div>
+              </div>
+            </a>`;
+          }).join('')}
+        </div>
+      </section>
+    `;
+  } catch(e) {}
+}
 
   // Hook up controls
   const s = $('[data-product-search]'); if (s) s.addEventListener('input', renderProductsListing);
@@ -1374,4 +1735,58 @@ async function bootstrap() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', bootstrap);
+// ---------- Dynamic Validation Rules (Phone & ZIP) ----------
+window.updateCountryRules = function(selectEl) {
+  const wrapper = selectEl.closest('.phone-input-group');
+  if (!wrapper) return;
+  const displayEl = wrapper.querySelector('.prefix-display');
+  const inputEl = wrapper.querySelector('input[type="tel"]');
+  
+  const zipEl = document.getElementById('ck-zip') || document.getElementById('biz-pincode');
+  
+  const rules = {
+    'IN': { phonePat: '[0-9]{10}', phoneMax: 10, phonePlace: '9876543210', zipPat: '[0-9]{6}', zipMax: 6, zipPlace: '500001' },
+    'US': { phonePat: '[0-9]{10}', phoneMax: 10, phonePlace: '2025550123', zipPat: '[0-9]{5}', zipMax: 5, zipPlace: '90210' },
+    'GB': { phonePat: '[0-9]{10,11}', phoneMax: 11, phonePlace: '7700900123', zipPat: '[A-Za-z0-9 ]{5,8}', zipMax: 8, zipPlace: 'SW1A 1AA' },
+    'AE': { phonePat: '[0-9]{9}', phoneMax: 9, phonePlace: '501234567', zipPat: '.*', zipMax: 10, zipPlace: '00000' },
+    'AU': { phonePat: '[0-9]{9}', phoneMax: 9, phonePlace: '400123456', zipPat: '[0-9]{4}', zipMax: 4, zipPlace: '2000' },
+    'CA': { phonePat: '[0-9]{10}', phoneMax: 10, phonePlace: '4165550123', zipPat: '[A-Za-z][0-9][A-Za-z] [0-9][A-Za-z][0-9]', zipMax: 7, zipPlace: 'M5V 2H1' },
+    'DEFAULT': { phonePat: '[0-9]{7,15}', phoneMax: 15, phonePlace: 'Phone number', zipPat: '.*', zipMax: 12, zipPlace: 'Postal Code' }
+  };
+  
+  const optText = selectEl.options[selectEl.selectedIndex]?.text || '';
+  const match = optText.match(/\((\+\d+)\)/);
+  const codeStr = match ? match[1] : '';
+  const nameStr = optText.replace(/\s*\(\+\d+\)\s*$/, '');
+  
+  if (displayEl && codeStr) displayEl.textContent = codeStr;
+  
+  const countryInput1 = document.getElementById('ck-country');
+  const countryInput2 = document.getElementById('biz-country');
+  if (countryInput1) countryInput1.value = nameStr;
+  if (countryInput2) countryInput2.value = nameStr;
+  
+  const r = rules[selectEl.value] || rules['DEFAULT'];
+  
+  if (inputEl) {
+    inputEl.pattern = r.phonePat;
+    inputEl.maxLength = r.phoneMax;
+    inputEl.placeholder = r.phonePlace;
+    inputEl.setCustomValidity('');
+  }
+  
+  if (zipEl) {
+    zipEl.pattern = r.zipPat;
+    zipEl.maxLength = r.zipMax;
+    zipEl.placeholder = r.zipPlace;
+    zipEl.setCustomValidity('');
+  }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  bootstrap();
+  // Initialize rules on page load for all selects
+  document.querySelectorAll('.prefix-select').forEach(sel => {
+    if(window.updateCountryRules) window.updateCountryRules(sel);
+  });
+});

@@ -6,7 +6,7 @@
 // This is the SINGLE source of order creation — frontend never touches the orders table directly
 // for new orders. That guarantees no RLS / schema-mismatch failures.
 
-const { encrypt, buildMerchantData } = require('./lib/ccavenue-crypto');
+const { encrypt, buildMerchantData } = require('./ccavenue-crypto');
 
 const CCAV_URL = {
   test:       'https://test.ccavenue.com/transaction/transaction.do?command=initiateTransaction',
@@ -25,7 +25,7 @@ module.exports = async function handler(req, res) {
   const WORKING_KEY  = (process.env.CCAVENUE_WORKING_KEY || '').trim();
   const ENV          = (process.env.CCAVENUE_ENV || 'test').trim().toLowerCase();
   const SITE_URL     = (process.env.SITE_URL || `https://${req.headers.host}`).trim();
-  const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim();
+  const SUPABASE_URL = (process.env.SUPABASE_URL?.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://') || '').trim();
   const SERVICE_KEY  = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 
   if (!MERCHANT_ID || !ACCESS_CODE || !WORKING_KEY) {
@@ -48,12 +48,36 @@ module.exports = async function handler(req, res) {
   const appliedCoup  = body.applied_coupon || '';
   const subtotal     = Number(body.items_subtotal || 0);
   const shippingAmt  = Number(body.shipping_amount || 0);
-  const discountAmt  = Number(body.discount_amount || 0);
+  let discountAmt    = Number(body.discount_amount || 0);
 
   if (Number(amount) <= 0) { res.status(400).json({ error: 'Invalid amount' }); return; }
   if (!ship.email || !ship.name || !ship.phone) { res.status(400).json({ error: 'Missing customer email / name / phone' }); return; }
 
-  // ---------- LOYALTY REDEMPTION (server-side validation) ----------
+  // 0️⃣ Validate Coupon & Recalculate Total (Security Check)
+  if (appliedCoup) {
+    try {
+      const { data: coup } = await fetch(`${SUPABASE_URL}/rest/v1/coupons?code=ilike.${encodeURIComponent(appliedCoup)}&limit=1`, {
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` }
+      }).then(r => r.json()).then(arr => ({ data: arr && arr.length ? arr[0] : null }));
+      
+      if (coup) {
+        if (coup.expires_at && new Date(coup.expires_at) < new Date()) throw new Error('Expired coupon');
+        if (coup.usage_limit && coup.used_count >= coup.usage_limit) throw new Error('Coupon usage limit reached');
+        if (coup.min_order_value && subtotal < coup.min_order_value) throw new Error('Minimum order not met for coupon');
+        
+        // Use verified discount amount from DB
+        discountAmt = Number(coup.discount_amount);
+      } else {
+        throw new Error('Invalid coupon');
+      }
+    } catch (e) {
+      console.warn('[ccavenue/initiate] Coupon validation failed:', e.message);
+      // We could reject here, but for safety against edge cases we just remove the invalid discount
+      discountAmt = 0; 
+    }
+  }
+
+  // 0️⃣b LOYALTY REDEMPTION (server-side validation)
   // 1 point = ₹1. Max redeemable = 50% of items subtotal, capped at balance.
   let loyaltyPoints = 0;
   const requestedPoints = Math.floor(Number(body.loyalty_points || 0));
@@ -86,9 +110,9 @@ module.exports = async function handler(req, res) {
       loyaltyPoints = 0;
     }
   }
-  // Recompute the payable amount server-side (client totals are advisory only)
-  const serverTotal = Math.max(1, subtotal - discountAmt + shippingAmt - loyaltyPoints);
-  const payAmount = loyaltyPoints > 0 ? serverTotal.toFixed(2) : amount;
+
+  // Recalculate exact total amount (coupon + loyalty verified server-side)
+  const finalTotalAmount = Math.max(loyaltyPoints > 0 ? 1 : 0, subtotal - discountAmt + shippingAmt - loyaltyPoints).toFixed(2);
 
   // 1️⃣  Insert pending order in Supabase via service role (bypasses RLS, guaranteed write)
   try {
@@ -98,14 +122,14 @@ module.exports = async function handler(req, res) {
         apikey: SERVICE_KEY,
         Authorization: `Bearer ${SERVICE_KEY}`,
         'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=minimal',
+        Prefer: 'return=minimal',
       },
       body: JSON.stringify({
         user_id: userId && /^[0-9a-f-]{36}$/i.test(userId) ? userId : null,
         ccavenue_order_id: orderId,
         items,
-        total_amount: Number(payAmount),
-        items_subtotal: subtotal || Number(payAmount),
+        total_amount: Number(finalTotalAmount),
+        items_subtotal: subtotal || Number(finalTotalAmount),
         shipping_amount: shippingAmt,
         discount_amount: discountAmt,
         loyalty_points_redeemed: loyaltyPoints,
@@ -115,7 +139,7 @@ module.exports = async function handler(req, res) {
         payment_method: 'CCAvenue',
         guest_email: ship.email,
         guest_phone: ship.phone,
-        shipping_address: ship,
+        shipping_address: ship
       }),
     });
     if (!insertRes.ok) {
@@ -130,39 +154,47 @@ module.exports = async function handler(req, res) {
     // continue anyway — webhook will upsert
   }
 
+  // Sanitize inputs to prevent CCAvenue WAF from blocking the transaction
+  const safeStr = (str) => String(str || '').replace(/[^a-zA-Z0-9\s@.,-]/g, '').substring(0, 250);
+  const safePhone = (str) => String(str || '').replace(/[^0-9+]/g, '').substring(0, 15);
+
+  const SITE_URL_CLEAN = SITE_URL.replace(/\/$/, ''); // Remove trailing slash
+
   // 2️⃣  Build CCAvenue encrypted payload
   const payload = {
     merchant_id:      MERCHANT_ID,
     order_id:         orderId,
-    amount:           payAmount,
+    amount:           finalTotalAmount,
     currency:         'INR',
-    redirect_url:     `${SITE_URL}/api/ccavenue/response`,
-    cancel_url:       `${SITE_URL}/api/ccavenue/response`,
+    redirect_url:     `${SITE_URL_CLEAN}/api/ccavenue/response`,
+    cancel_url:       `${SITE_URL_CLEAN}/api/ccavenue/response`,
     language:         'EN',
-    billing_name:     ship.name,
-    billing_address:  ship.address || '',
-    billing_city:     ship.city || '',
-    billing_state:    ship.state || '',
-    billing_zip:      ship.zip || '',
-    billing_country:  ship.country || 'India',
-    billing_tel:      ship.phone,
-    billing_email:    ship.email,
-    delivery_name:    ship.name,
-    delivery_address: ship.address || '',
-    delivery_city:    ship.city || '',
-    delivery_state:   ship.state || '',
-    delivery_zip:     ship.zip || '',
-    delivery_country: ship.country || 'India',
-    delivery_tel:     ship.phone,
-    merchant_param1:  userId || 'guest',
-    merchant_param2:  ship.email.substring(0, 250),
-    merchant_param3:  appliedCoup,
+    billing_name:     safeStr(ship.name),
+    billing_address:  safeStr(ship.address),
+    billing_city:     safeStr(ship.city),
+    billing_state:    safeStr(ship.state),
+    billing_zip:      safeStr(ship.zip),
+    billing_country:  safeStr(ship.country || 'India'),
+    billing_tel:      safePhone(ship.phone),
+    billing_email:    safeStr(ship.email),
+    delivery_name:    safeStr(ship.name),
+    delivery_address: safeStr(ship.address),
+    delivery_city:    safeStr(ship.city),
+    delivery_state:   safeStr(ship.state),
+    delivery_zip:     safeStr(ship.zip),
+    delivery_country: safeStr(ship.country || 'India'),
+    delivery_tel:     safePhone(ship.phone),
+    merchant_param1:  safeStr(userId || 'guest'),
+    merchant_param2:  safeStr(ship.email),
+    merchant_param3:  safeStr(appliedCoup),
+    customer_identifier: userId && body.save_card ? safeStr(userId) : '',
   };
 
   const plaintext  = buildMerchantData(payload);
   const ciphertext = encrypt(plaintext, WORKING_KEY);
 
-  const checkoutUrl = CCAV_URL[ENV] || CCAV_URL.test;
+  // Force Production URL for CCAvenue to eliminate Test environment mismatch
+  const checkoutUrl = 'https://secure.ccavenue.com/transaction/transaction.do?command=initiateTransaction';
 
   const html = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Redirecting to CCAvenue…</title>
@@ -170,7 +202,7 @@ module.exports = async function handler(req, res) {
 <body>
   <div class="s"></div>
   <h2 style="font-family:Georgia,serif;margin:0 0 6px;">Redirecting to secure payment</h2>
-  <p style="opacity:.8;margin:0;">Powered by CCAvenue · Order ${escapeHtml(orderId)} · ₹${escapeHtml(payAmount)}</p>
+  <p style="opacity:.8;margin:0;">Powered by CCAvenue · Order ${escapeHtml(orderId)} · ₹${escapeHtml(finalTotalAmount)}</p>
   <form id="f" method="post" action="${escapeHtml(checkoutUrl)}">
     <input type="hidden" name="encRequest" value="${escapeHtml(ciphertext)}" />
     <input type="hidden" name="access_code" value="${escapeHtml(ACCESS_CODE)}" />

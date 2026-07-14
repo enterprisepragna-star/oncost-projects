@@ -5,7 +5,7 @@
 //   cancel-order      (POST)  — customer cancels own un-shipped order (user token auth)
 //   invoice-pdf       (GET)   — stream GST invoice PDF for an order
 
-const { generateInvoicePDF } = require('../email/lib/invoice-pdf');
+const { generateInvoicePDF } = require('../email/_lib/invoice-pdf');
 
 function env() {
   return {
@@ -51,9 +51,37 @@ module.exports = async function handler(req, res) {
   if (action === 'complaint-submit') return complaintSubmit(req, res);
   if (action === 'cancel-order') return cancelOrder(req, res);
   if (action === 'invoice-pdf') return invoicePdf(req, res);
+  if (action === 'coupon-validate' || action === 'validate') return couponValidate(req, res);
   res.status(404).json({ error: 'Unknown store action', got: action });
 };
 module.exports.config = { api: { bodyParser: true } };
+
+// ---------------------------------------------------------------------------
+// COUPON VALIDATE — server-side check against Supabase (used by cart page)
+// ---------------------------------------------------------------------------
+async function couponValidate(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
+  const { code, cartSubtotal } = req.body || {};
+  if (!code) return res.status(400).json({ valid: false, error: 'Coupon code is required' });
+  try {
+    const r = await sb(`/rest/v1/coupons?code=ilike.${encodeURIComponent(code)}&select=*&limit=1`);
+    const rows = Array.isArray(r.body) ? r.body : [];
+    if (!r.ok || !rows.length) return res.status(404).json({ valid: false, error: 'Invalid coupon code' });
+    const data = rows[0];
+    if (data.expires_at && new Date(data.expires_at) < new Date()) return res.status(400).json({ valid: false, error: 'This coupon has expired' });
+    if (data.usage_limit && data.used_count >= data.usage_limit) return res.status(400).json({ valid: false, error: 'Coupon usage limit reached' });
+    if (cartSubtotal && data.min_order_value && Number(cartSubtotal) < Number(data.min_order_value)) {
+      return res.status(400).json({ valid: false, error: `Minimum order of ₹${data.min_order_value} required` });
+    }
+    res.status(200).json({
+      valid: true,
+      coupon: { id: data.id, code: data.code, discount_amount: data.discount_amount, min_order_value: data.min_order_value },
+    });
+  } catch (err) {
+    console.error('[store/coupon-validate] error:', err.message);
+    res.status(500).json({ valid: false, error: 'Server error validating coupon' });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // COMPLAINT SUBMIT — guest-safe (service key insert returns ticket_number)

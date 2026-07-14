@@ -234,7 +234,6 @@ h1,h2,h3,h4,h5 { font-family: var(--font-display); color: var(--burgundy); lette
 .hero-visual img {
   width: 100%; height: 100%; object-fit: cover;
   position: absolute; inset: 0;
-  mix-blend-mode: multiply; opacity: .9;
 }
 /* ---------- Hero slideshow (auto-crossfade) ---------- */
 .hero-slides {
@@ -572,6 +571,50 @@ h1,h2,h3,h4,h5 { font-family: var(--font-display); color: var(--burgundy); lette
 .toolbar .field { flex: 1; min-width: 240px; }
 .toolbar .select { min-width: 180px; }
 
+/* ---------- Phone Input Group & Smart Select ---------- */
+.phone-input-group {
+  display: flex; align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #FFF;
+  overflow: hidden;
+  transition: var(--transition);
+}
+.phone-input-group:focus-within {
+  border-color: var(--burgundy);
+  box-shadow: 0 0 0 3px rgba(122,31,53,.12);
+}
+.prefix-wrapper {
+  position: relative;
+  display: flex; align-items: center;
+  background: var(--cream);
+  border-right: 1px solid var(--line);
+}
+.prefix-display {
+  padding: 0 16px;
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 14px;
+  pointer-events: none;
+}
+select.prefix-select {
+  position: absolute; inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%; height: 100%;
+}
+.phone-input-group input.field, .phone-input-group input.input {
+  border: none;
+  border-radius: 0;
+  flex: 1;
+  margin-top: 0 !important;
+  box-shadow: none !important;
+}
+.phone-input-group input:focus {
+  outline: none; box-shadow: none;
+}
+
+
 /* ---------- Product Detail ---------- */
 .product-detail {
   display: grid;
@@ -675,6 +718,8 @@ h1,h2,h3,h4,h5 { font-family: var(--font-display); color: var(--burgundy); lette
 @media (max-width: 960px) {
   .desktop-nav { display: none; }
   .hero, .bulk-panel, .product-detail, .cart-grid, .account-grid { grid-template-columns: 1fr; }
+  .hero-visual { min-height: 360px; margin-top: 16px; }
+  .hero-kpi { right: 16px; top: 24px; transform: rotate(3deg); }
   .footer-grid { grid-template-columns: 1fr 1fr; }
   .collection-grid { grid-template-columns: repeat(2, 1fr); }
   .account-side { position: static; }
@@ -695,6 +740,8 @@ h1,h2,h3,h4,h5 { font-family: var(--font-display); color: var(--burgundy); lette
   .product-grid { grid-template-columns: 1fr 1fr; gap: 14px; }
   .product-card .info { padding: 12px; }
   .btn { padding: 11px 18px; font-size: 13px; }
+  .hero-visual { min-height: 280px; }
+  .hero-kpi { transform: scale(0.85) rotate(3deg); transform-origin: top right; right: 8px; top: 16px; }
 }
 
 /* ===================== Phase 4: Gallery, Lightbox, Orders, Loyalty ===================== */

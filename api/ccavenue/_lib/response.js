@@ -5,13 +5,14 @@
 // UPSERT logic: PATCH by ccavenue_order_id; if 0 rows matched (i.e. pre-insert failed),
 // INSERT a new row using the decrypted payload as the only source of truth.
 
-const { decrypt, parseResponse } = require('./lib/ccavenue-crypto');
+const { decrypt, parseResponse } = require('./ccavenue-crypto');
+const { sendOrderConfirmation } = require('../../_lib/email');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') { res.status(405).send('Method Not Allowed'); return; }
 
   const WORKING_KEY  = (process.env.CCAVENUE_WORKING_KEY || '').trim();
-  const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim();
+  const SUPABASE_URL = (process.env.SUPABASE_URL?.replace(/\/$/, '').replace(/^(?!https?:\/\/)/, 'https://') || '').trim();
   const SERVICE_KEY  = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   const SITE_URL     = (process.env.SITE_URL || `https://${req.headers.host}`).trim();
 
@@ -204,6 +205,8 @@ module.exports = async function handler(req, res) {
     const INTERNAL_KEY = process.env.INTERNAL_API_KEY;
     const phone = orderRow.guest_phone || (orderRow.shipping_address && orderRow.shipping_address.phone);
     const name  = (orderRow.shipping_address && orderRow.shipping_address.name) || 'Customer';
+    
+    // 1. Send WhatsApp confirmation
     if (phone) {
       fetch(`${SITE_URL}/api/whatsapp?action=send`, {
         method: 'POST',
@@ -220,6 +223,9 @@ module.exports = async function handler(req, res) {
         }),
       }).catch(err => console.error('[ccavenue/response] WhatsApp confirm failed:', err.message));
     }
+
+    // 2. Send Custom HTML Invoice Email
+    sendOrderConfirmation(orderRow).catch(err => console.error('[ccavenue/response] Email confirm failed:', err.message));
   }
 
   // ============= REDIRECT TO THANK-YOU =============

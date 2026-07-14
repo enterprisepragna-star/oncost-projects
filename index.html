@@ -8,8 +8,8 @@
   <link rel="stylesheet" href="storefront.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-client.js"></script>  <script defer src="/seo.js"></script>
-
+  <script src="supabase-client.js"></script>
+  <script src="seo.js" defer></script>
 </head>
 <body>
 
@@ -87,6 +87,9 @@
       <div style="text-align:center;margin-top:32px;"><a class="btn outline" href="products.html">View all products <i class="fas fa-arrow-right"></i></a></div>
     </section>
 
+    <!-- RECENTLY VIEWED -->
+    <div data-recently-viewed></div>
+
     <!-- BULK BANNER -->
     <section class="section">
       <div class="bulk-panel">
@@ -103,6 +106,13 @@
         </div>
       </div>
     </section>
+
+    <!-- OFFERS POPUP -->
+    <dialog id="offers-popup" class="offers-popup" style="border:none;border-radius:12px;padding:24px;max-width:380px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.25);position:fixed;bottom:24px;left:24px;margin:0;z-index:9999;background:#fff;">
+      <button onclick="this.parentElement.close(); sessionStorage.setItem('offers_closed', 'true');" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);"><i class="fas fa-times"></i></button>
+      <h3 style="margin-top:0;color:var(--burgundy);display:flex;align-items:center;gap:8px;"><i class="fas fa-gift" style="color:var(--gold);animation:pulse 2s infinite;"></i> Active Offers</h3>
+      <div id="offers-list" style="display:grid;gap:12px;margin-top:16px;"></div>
+    </dialog>
   </main>
 
   <!-- FOOTER -->

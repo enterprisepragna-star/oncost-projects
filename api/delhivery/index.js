@@ -10,7 +10,7 @@
 //
 // Also accepts trailing path: /api/delhivery/serviceability?... (uses last path segment as action).
 
-const { checkPincode, calculateRate, createShipment, schedulePickup, trackShipment, BASE, PICKUP_PINCODE } = require('./lib/client');
+const { checkPincode, calculateRate, createShipment, schedulePickup, trackShipment, BASE, PICKUP_PINCODE } = require('./_lib/client');
 
 function parseAction(req) {
   // Action from ?action= query OR last segment of URL path
@@ -67,22 +67,28 @@ async function handleCreateShipment(req, res) {
   if (order.awb_number) return res.status(200).json({ ok: true, awb: order.awb_number, message: 'AWB already exists' });
 
   const items = Array.isArray(order.items) ? order.items : [];
-  let totalWeight = 0, maxL = 0, maxB = 0, totalH = 0;
-  for (const it of items) {
-    if (!it.product_id) continue;
-    const pRes = await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${encodeURIComponent(it.product_id)}&select=weight_grams,length_cm,breadth_cm,height_cm,hsn_code&limit=1`, {
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-    });
-    const ps = await pRes.json();
-    const prod = ps?.[0] || {};
-    const qty = it.qty || it.quantity || 1;
-    totalWeight += Number(prod.weight_grams || 500) * qty;
-    maxL = Math.max(maxL, Number(prod.length_cm || 15));
-    maxB = Math.max(maxB, Number(prod.breadth_cm || 10));
-    totalH += Number(prod.height_cm || 6) * qty;
-    if (prod.hsn_code && !it.hsn_code) it.hsn_code = prod.hsn_code;
+  let totalWeight = Number(req.body.weight_grams) || 0;
+  let maxL = Number(req.body.length_cm) || 0;
+  let maxB = Number(req.body.breadth_cm) || 0;
+  let totalH = Number(req.body.height_cm) || 0;
+
+  if (!totalWeight) {
+    for (const it of items) {
+      if (!it.product_id) continue;
+      const pRes = await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${encodeURIComponent(it.product_id)}&select=weight_grams,length_cm,breadth_cm,height_cm,hsn_code&limit=1`, {
+        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      });
+      const ps = await pRes.json();
+      const prod = ps?.[0] || {};
+      const qty = it.qty || it.quantity || 1;
+      totalWeight += Number(prod.weight_grams || 500) * qty;
+      maxL = Math.max(maxL, Number(prod.length_cm || 15));
+      maxB = Math.max(maxB, Number(prod.breadth_cm || 10));
+      totalH += Number(prod.height_cm || 6) * qty;
+      if (prod.hsn_code && !it.hsn_code) it.hsn_code = prod.hsn_code;
+    }
+    if (!totalWeight) totalWeight = 500;
   }
-  if (!totalWeight) totalWeight = 500;
 
   await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}`, {
     method: 'PATCH',
@@ -141,103 +147,6 @@ async function handleTrack(req, res) {
   res.status(200).json(data);
 }
 
-// Delhivery → ONCOST webhook: receive AWB status updates and propagate to DB + email + WhatsApp
-async function handleWebhook(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
-  try {
-    const payload = req.body || {};
-    console.log('[delhivery/webhook] payload:', JSON.stringify(payload));
-
-    const shipment = payload.Shipment || payload.shipment || {};
-    const awb = shipment.Waybill || shipment.AWB || payload.waybill;
-    let statusObj = shipment.Status || payload.status || {};
-    if (typeof statusObj === 'string') statusObj = { Status: statusObj };
-    const statusText = statusObj.Status || statusObj.status || payload.current_status;
-    const location   = statusObj.StatusLocation || statusObj.location || '';
-
-    if (!awb || !statusText) return res.status(400).json({ error: 'Missing AWB or Status' });
-
-    const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim();
-    const SERVICE_KEY  = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-    const SITE_URL     = (process.env.SITE_URL || `https://${req.headers.host}`).trim();
-    if (!SUPABASE_URL || !SERVICE_KEY) return res.status(500).json({ error: 'Supabase env missing' });
-
-    const searchRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?awb_number=eq.${encodeURIComponent(awb)}&select=*&limit=1`, {
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` }
-    });
-    const orders = await searchRes.json();
-    if (!Array.isArray(orders) || !orders.length) {
-      console.warn(`[delhivery/webhook] No order for AWB ${awb}`);
-      return res.status(200).json({ message: 'No matching order' });
-    }
-    const orderRow = orders[0];
-    const lc = String(statusText).toLowerCase();
-    let mappedStatus = statusText;
-    if (lc === 'delivered') mappedStatus = 'Delivered';
-    else if (lc === 'rto')   mappedStatus = 'Returned';
-
-    // Update DB — also flip top-level status so My Orders + review cron pick it up
-    await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${orderRow.id}`, {
-      method: 'PATCH',
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        shipping_status: mappedStatus,
-        ...(mappedStatus === 'Delivered' || mappedStatus === 'Returned' ? { status: mappedStatus } : {}),
-      })
-    });
-
-    // Optional: tracking-update email (best-effort, never blocks the webhook)
-    try {
-      const email = orderRow.guest_email || orderRow.shipping_address?.email;
-      if (email && process.env.RESEND_API_KEY) {
-        fetch(`${SITE_URL}/api/email/send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
-          body: JSON.stringify({
-            type: 'order_shipped',
-            to: email,
-            data: {
-              name: orderRow.shipping_address?.name || 'Customer',
-              order_id: orderRow.ccavenue_order_id || orderRow.id,
-              courier: 'Delhivery',
-              awb,
-              status: statusText,
-              location,
-              tracking_url: orderRow.tracking_url || `https://www.delhivery.com/track/package/${awb}`,
-            },
-          }),
-        }).catch(e => console.error('[delhivery/webhook] email failed:', e.message));
-      }
-    } catch (e) { console.error('[delhivery/webhook] email block failed:', e.message); }
-
-    // Optional: WhatsApp shipping update
-    try {
-      const phone = orderRow.guest_phone || orderRow.shipping_address?.phone;
-      if (phone) {
-        fetch(`${SITE_URL}/api/whatsapp?action=send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'shipping_update',
-            to: phone,
-            params: {
-              customer_name: orderRow.shipping_address?.name || 'Customer',
-              order_id: String(orderRow.id).substring(0,8).toUpperCase(),
-              status: statusText,
-              tracking_url: orderRow.tracking_url || `https://www.delhivery.com/track/package/${awb}`,
-            },
-          }),
-        }).catch(e => console.error('[delhivery/webhook] whatsapp failed:', e.message));
-      }
-    } catch (e) { console.error('[delhivery/webhook] whatsapp block failed:', e.message); }
-
-    return res.status(200).json({ success: true, awb, mapped_status: mappedStatus });
-  } catch (err) {
-    console.error('[delhivery/webhook] error:', err.message);
-    return res.status(500).json({ error: 'Internal Server Error' });
-  }
-}
-
 module.exports = async function handler(req, res) {
   try {
     const action = parseAction(req);
@@ -247,11 +156,10 @@ module.exports = async function handler(req, res) {
       case 'label':             return await handleLabel(req, res);
       case 'schedule-pickup':   return await handleSchedulePickup(req, res);
       case 'track':             return await handleTrack(req, res);
-      case 'webhook':           return await handleWebhook(req, res);
       default:
         return res.status(400).json({
           error: 'Unknown action',
-          valid_actions: ['serviceability', 'create-shipment', 'label', 'schedule-pickup', 'track', 'webhook'],
+          valid_actions: ['serviceability', 'create-shipment', 'label', 'schedule-pickup', 'track'],
           usage: 'GET /api/delhivery?action=serviceability&drop_pincode=560001  OR  /api/delhivery/serviceability?drop_pincode=560001',
         });
     }
