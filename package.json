@@ -8,7 +8,7 @@
     "vercel-build": "echo 'No build needed — static site'"
   },
   "engines": {
-    "node": "18.x"
+    "node": "24.x"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
