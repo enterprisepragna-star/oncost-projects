@@ -981,6 +981,93 @@ window.openLightbox = function(images, startIdx = 0, alt = '') {
   stage.addEventListener('pointercancel', endPointer);
 };
 
+// ---------- Complete-profile gate (mandatory mobile + email for marketing) ----------
+function maybeShowCompleteProfile() {
+  if (!state.user || state.isAdmin) return;
+  const p = state.profile || {};
+  const meta = state.user.user_metadata || {};
+  const authEmail = state.user.email || '';
+  const bestName = p.name || meta.full_name || meta.name || (authEmail ? authEmail.split('@')[0] : '');
+  const hasPhone = p.phone && String(p.phone).replace(/\D/g, '').length >= 10;
+  const hasEmail = !!(p.email || authEmail);
+
+  // Silently sync auth email/name into the profile for the marketing directory
+  if (hasPhone && hasEmail) {
+    if ((!p.email && authEmail) || !p.name) {
+      supabaseClient.from('profiles').upsert({
+        id: state.user.id,
+        name: bestName || 'Customer',
+        email: p.email || authEmail,
+        phone: p.phone,
+      }).then(({ error }) => {
+        if (error && error.message?.includes('email')) {
+          supabaseClient.from('profiles').upsert({ id: state.user.id, name: bestName || 'Customer', phone: p.phone }).then(() => {});
+        }
+      });
+    }
+    return;
+  }
+
+  const ov = document.createElement('div');
+  ov.className = 'cp-overlay';
+  ov.setAttribute('data-testid', 'complete-profile-modal');
+  ov.innerHTML = `
+    <div class="cp-card">
+      <div style="text-align:center;margin-bottom:6px;"><i class="fas fa-user-check" style="font-size:28px;color:var(--gold);"></i></div>
+      <h3 style="text-align:center;margin:0 0 4px;font-size:1.25rem;">Complete your profile</h3>
+      <p style="text-align:center;color:var(--muted);font-size:13px;margin:0 0 18px;">Just once — so we can send order updates and exclusive offers.</p>
+      <div id="cp-err" style="display:none;background:#fbecec;color:var(--error);border:1px solid #e8c1c1;padding:9px;border-radius:6px;font-size:12px;margin-bottom:12px;"></div>
+      <label class="cp-label">Full Name
+        <input class="field" id="cp-name" value="${escapeHTML(bestName)}" placeholder="Your name" data-testid="cp-name" />
+      </label>
+      <label class="cp-label">Mobile Number <span style="color:var(--error);">*</span>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <span style="display:flex;align-items:center;padding:0 12px;background:var(--cream);border:1px solid var(--line);border-radius:8px;font-size:14px;font-weight:600;">+91</span>
+          <input class="field" id="cp-phone" type="tel" maxlength="10" inputmode="numeric" value="${escapeHTML(String(p.phone || '').replace(/^\+?91/, '').replace(/\D/g, '').slice(-10))}" placeholder="10-digit mobile" style="flex:1;margin-top:0;" data-testid="cp-phone" />
+        </div>
+      </label>
+      <label class="cp-label">Email ${authEmail ? '' : '<span style="color:var(--error);">*</span>'}
+        <input class="field" id="cp-email" type="email" value="${escapeHTML(p.email || authEmail)}" ${authEmail ? 'readonly style="margin-top:6px;background:var(--cream);color:var(--muted);"' : 'placeholder="you@example.com"'} data-testid="cp-email" />
+      </label>
+      <button class="btn primary" id="cp-save" style="width:100%;margin-top:16px;" data-testid="cp-save"><i class="fas fa-check"></i> Save & Continue</button>
+      <div style="text-align:center;margin-top:12px;"><button id="cp-logout" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline;">Sign out instead</button></div>
+    </div>`;
+  document.body.appendChild(ov);
+  document.body.style.overflow = 'hidden';
+
+  const showErr = (m) => { const e = ov.querySelector('#cp-err'); e.textContent = m; e.style.display = 'block'; };
+  ov.querySelector('#cp-logout').addEventListener('click', async () => {
+    await supabaseClient.auth.signOut();
+    location.href = 'index.html';
+  });
+  ov.querySelector('#cp-save').addEventListener('click', async () => {
+    const name = ov.querySelector('#cp-name').value.trim();
+    const phone = ov.querySelector('#cp-phone').value.replace(/\D/g, '');
+    const email = ov.querySelector('#cp-email').value.trim().toLowerCase();
+    if (name.length < 2) return showErr('Please enter your full name.');
+    if (!/^[6-9]\d{9}$/.test(phone)) return showErr('Please enter a valid 10-digit Indian mobile number.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showErr('Please enter a valid email address.');
+    const btn = ov.querySelector('#cp-save');
+    btn.disabled = true; btn.innerHTML = 'Saving…';
+    let { error } = await supabaseClient.from('profiles').upsert({
+      id: state.user.id, name, phone: '+91' + phone, email,
+    });
+    if (error && error.message?.includes('email')) {
+      // profiles.email column missing (migration not yet run) — save without it
+      ({ error } = await supabaseClient.from('profiles').upsert({ id: state.user.id, name, phone: '+91' + phone }));
+    }
+    if (error) {
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> Save & Continue';
+      return showErr('Could not save: ' + error.message);
+    }
+    state.profile = { ...(state.profile || {}), name, phone: '+91' + phone, email };
+    document.body.style.overflow = '';
+    ov.remove();
+    toast('Profile saved. Welcome to ONCOST!', 'ok');
+    renderAuthState();
+  });
+}
+
 // ---------- Categories ----------
 async function loadCategories() {
   try {
@@ -1605,6 +1692,7 @@ async function bootstrap() {
   setupEnquiryForm();
   fetchAndRenderOffers();
   renderRecentlyViewed();
+  maybeShowCompleteProfile();
 function renderRecentlyViewed() {
   const slot = $('[data-recently-viewed]');
   if (!slot) return;
