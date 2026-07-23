@@ -62,11 +62,14 @@ module.exports = async function handler(req, res) {
       
       if (coup) {
         if (coup.expires_at && new Date(coup.expires_at) < new Date()) throw new Error('Expired coupon');
-        if (coup.usage_limit && coup.used_count >= coup.usage_limit) throw new Error('Coupon usage limit reached');
-        if (coup.min_order_value && subtotal < coup.min_order_value) throw new Error('Minimum order not met for coupon');
-        
-        // Use verified discount amount from DB
-        discountAmt = Number(coup.discount_amount);
+        if (coup.usage_limit && Number(coup.used_count || 0) >= Number(coup.usage_limit)) throw new Error('Coupon usage limit reached');
+        const minOrder = Number(coup.min_order_amount ?? coup.min_order_value ?? 0);
+        if (minOrder && subtotal < minOrder) throw new Error('Minimum order not met for coupon');
+
+        // Use verified discount from DB (supports flat ₹ and percent types)
+        const dv = Number(coup.discount_value ?? coup.discount_amount ?? 0);
+        discountAmt = coup.discount_type === 'percent' ? (subtotal * dv) / 100 : dv;
+        discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
       } else {
         throw new Error('Invalid coupon');
       }
@@ -111,8 +114,10 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // Recalculate exact total amount (coupon + loyalty verified server-side)
-  const finalTotalAmount = Math.max(loyaltyPoints > 0 ? 1 : 0, subtotal - discountAmt + shippingAmt - loyaltyPoints).toFixed(2);
+  // Recalculate exact total amount (coupon + loyalty verified server-side, + optional gift wrap)
+  const giftWrap = body.gift_wrap === true || body.gift_wrap === 'true';
+  const giftWrapCharge = giftWrap ? 50 : 0;
+  const finalTotalAmount = Math.max(loyaltyPoints > 0 ? 1 : 0, subtotal - discountAmt + shippingAmt + giftWrapCharge - loyaltyPoints).toFixed(2);
 
   // 1️⃣  Insert pending order in Supabase via service role (bypasses RLS, guaranteed write)
   try {
@@ -132,8 +137,8 @@ module.exports = async function handler(req, res) {
         items_subtotal: subtotal || Number(finalTotalAmount),
         shipping_amount: shippingAmt,
         discount_amount: discountAmt,
-        loyalty_points_redeemed: loyaltyPoints,
-        loyalty_discount: loyaltyPoints,
+        ...(loyaltyPoints > 0 ? { loyalty_points_redeemed: loyaltyPoints, loyalty_discount: loyaltyPoints } : {}),
+        ...(giftWrap ? { gift_wrap: true, gift_wrap_charge: giftWrapCharge } : {}),
         status: 'Processing',
         payment_status: 'Pending',
         payment_method: 'CCAvenue',

@@ -412,16 +412,6 @@ async function renderProductDetail() {
           <button class="btn outline" onclick="toggleWishlist('${escapeHTML(p.id)}')" data-testid="pd-wishlist"><i class="${inWishlist?'fas':'far'} fa-heart"></i> ${inWishlist?'SAVED TO WISHLIST':'ADD TO WISHLIST'}</button>
           <a class="btn secondary" href="bulk.html?product=${encodeURIComponent(p.id)}" data-testid="pd-bulk-enquiry"><i class="fab fa-whatsapp"></i> Bulk Enquiry</a>
         </div>
-        
-        <!-- Pincode Delivery Checker -->
-        <div style="margin:20px 0;padding:16px;border:1px solid var(--line);border-radius:8px;background:#fdfdfd;">
-          <div style="font-weight:600;font-size:14px;margin-bottom:8px;display:flex;align-items:center;gap:6px;"><i class="fas fa-map-marker-alt" style="color:var(--burgundy);"></i> Check Delivery Estimate</div>
-          <div style="display:flex;gap:8px;">
-            <input type="text" id="pd-pincode-input" placeholder="Enter Pincode" style="flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:6px;font-size:14px;outline:none;" maxlength="6" />
-            <button class="btn primary sm" onclick="checkDeliveryPincode('${escapeHTML(p.id)}')" id="pd-pincode-btn" style="padding:0 16px;">Check</button>
-          </div>
-          <div id="pd-pincode-result" style="margin-top:10px;font-size:13px;font-weight:500;display:none;"></div>
-        </div>
 
         <div class="pd-perks">
           <div class="perk"><i class="fas fa-truck"></i><div><b>Pan India delivery</b><br><span style="color:var(--muted)">Free shipping over ₹999</span></div></div>
@@ -686,9 +676,10 @@ function cartTotals() {
   });
   let discount = 0;
   if (state.appliedCoupon) {
-    if (state.appliedCoupon.discount_type === 'percent') discount = subtotal * state.appliedCoupon.discount_value / 100;
-    else discount = state.appliedCoupon.discount_value;
-    discount = Math.min(discount, subtotal);
+    const dv = Number(state.appliedCoupon.discount_value ?? state.appliedCoupon.discount_amount ?? 0) || 0;
+    if (state.appliedCoupon.discount_type === 'percent') discount = subtotal * dv / 100;
+    else discount = dv;
+    discount = Math.min(Math.max(0, discount), subtotal);
   }
   const shipping = 0; // Live calculated at checkout
   const total = Math.max(0, subtotal - discount + shipping);
@@ -1335,6 +1326,7 @@ function renderAccountOrders(orders) {
         ${subtotal ? `<div class="line"><span>Subtotal</span><span>${fmtINR(subtotal)}</span></div>` : ''}
         ${discount > 0 ? `<div class="line" style="color:var(--success);"><span>Discount</span><span>−${fmtINR(discount)}</span></div>` : ''}
         ${loyalty > 0 ? `<div class="line" style="color:var(--success);"><span>Loyalty points used</span><span>−${fmtINR(loyalty)}</span></div>` : ''}
+        ${Number(o.gift_wrap_charge || 0) > 0 ? `<div class="line"><span><i class="fas fa-gift" style="color:var(--burgundy);"></i> Gift wrap</span><span>${fmtINR(o.gift_wrap_charge)}</span></div>` : ''}
         ${subtotal ? `<div class="line"><span>Shipping</span><span>${shipping === 0 ? 'Free' : fmtINR(shipping)}</span></div>` : ''}
         <div class="line total"><span>Grand Total</span><span>${fmtINR(o.total_amount)}</span></div>
       </div>
@@ -1438,18 +1430,7 @@ function renderAccountLeads(leads) {
 }
 function renderAccountProfile() {
   const p = state.profile || {};
-  const loyaltyPts = Number(p.loyalty_points || 0);
   return `<h2>Profile</h2>
-    <div style="background:linear-gradient(135deg, var(--burgundy), #4a001a);color:#fff;padding:20px;border-radius:10px;margin-bottom:24px;max-width:480px;display:flex;align-items:center;gap:16px;">
-      <div style="background:rgba(255,255,255,0.2);width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;">
-        <i class="fas fa-crown"></i>
-      </div>
-      <div>
-        <div style="font-size:13px;opacity:0.9;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Loyalty Points</div>
-        <div style="font-size:28px;font-weight:700;">${loyaltyPts}</div>
-        ${loyaltyPts > 0 ? '<div style="font-size:12px;opacity:0.8;margin-top:2px;">Equivalent to ₹' + loyaltyPts + ' discount</div>' : ''}
-      </div>
-    </div>
     <div style="display:grid;gap:14px;max-width:480px;">
       <label>Name <input id="prof-name" class="field" value="${escapeHTML(p.name||'')}" /></label>
       <label>Phone <input id="prof-phone" class="field" value="${escapeHTML(p.phone||'')}" /></label>
@@ -1564,7 +1545,10 @@ window.saveAddress = async function() {
     res = await supabaseClient.from('addresses').insert(payload);
   }
   
-  if (res.error) return toast('Save failed: ' + res.error.message, 'err');
+  if (res.error) {
+    if (res.error.message?.includes('addresses')) return toast('Address book is being set up — please try again after our next database update.', 'err');
+    return toast('Save failed: ' + res.error.message, 'err');
+  }
   toast('Address saved', 'ok');
   document.getElementById('addr-modal').close();
   renderAccount(); // Refresh

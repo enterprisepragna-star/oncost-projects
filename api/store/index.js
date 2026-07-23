@@ -122,13 +122,19 @@ async function couponValidate(req, res) {
     if (!r.ok || !rows.length) return res.status(404).json({ valid: false, error: 'Invalid coupon code' });
     const data = rows[0];
     if (data.expires_at && new Date(data.expires_at) < new Date()) return res.status(400).json({ valid: false, error: 'This coupon has expired' });
-    if (data.usage_limit && data.used_count >= data.usage_limit) return res.status(400).json({ valid: false, error: 'Coupon usage limit reached' });
-    if (cartSubtotal && data.min_order_value && Number(cartSubtotal) < Number(data.min_order_value)) {
-      return res.status(400).json({ valid: false, error: `Minimum order of ₹${data.min_order_value} required` });
+    if (data.usage_limit && Number(data.used_count || 0) >= Number(data.usage_limit)) return res.status(400).json({ valid: false, error: 'Coupon usage limit reached' });
+    const minOrder = Number(data.min_order_amount ?? data.min_order_value ?? 0);
+    if (cartSubtotal && minOrder && Number(cartSubtotal) < minOrder) {
+      return res.status(400).json({ valid: false, error: `Minimum order of ₹${minOrder} required` });
     }
     res.status(200).json({
       valid: true,
-      coupon: { id: data.id, code: data.code, discount_amount: data.discount_amount, min_order_value: data.min_order_value },
+      coupon: {
+        id: data.id, code: data.code,
+        discount_type: data.discount_type || 'flat',
+        discount_value: Number(data.discount_value ?? data.discount_amount ?? 0),
+        min_order_amount: minOrder,
+      },
     });
   } catch (err) {
     console.error('[store/coupon-validate] error:', err.message);

@@ -150,6 +150,32 @@ DROP POLICY IF EXISTS "Users manage own cart" ON public.cart_items;
 CREATE POLICY "Users manage own cart" ON public.cart_items
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
+-- 8) SAVED ADDRESSES (address book + checkout autofill) -------------------------
+CREATE TABLE IF NOT EXISTS public.addresses (
+  id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id     uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name        text NOT NULL,
+  email       text,
+  phone       text NOT NULL,
+  address     text NOT NULL,
+  city        text NOT NULL,
+  state       text NOT NULL,
+  zip         text NOT NULL,
+  country     text DEFAULT 'India',
+  is_default  boolean DEFAULT false,
+  created_at  timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_addresses_user ON public.addresses (user_id);
+ALTER TABLE public.addresses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users manage own addresses" ON public.addresses;
+CREATE POLICY "Users manage own addresses" ON public.addresses
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- 9) GIFT WRAP (premium packaging, +₹50 at checkout) ----------------------------
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS gift_wrap boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS gift_wrap_charge numeric DEFAULT 0;
+
 -- ============================================================================
 -- Done. Summary:
 --  • products.image_urls jsonb — up to 8 gallery images per product

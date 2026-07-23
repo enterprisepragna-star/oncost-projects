@@ -296,6 +296,16 @@
             <label style="font-size:13px;font-weight:600;color:var(--ink-soft);">Country<input class="field" id="ck-country" value="India" readonly style="width:100%;margin-top:4px;background:#f9f4ec;"></label>
           </div>
 
+          <div style="margin-top:18px;border:1px solid var(--gold);background:var(--gold-soft);border-radius:8px;padding:14px 16px;">
+            <label style="display:flex;align-items:flex-start;gap:10px;font-size:14px;cursor:pointer;">
+              <input type="checkbox" id="ck-giftwrap" data-testid="ck-giftwrap" style="margin-top:3px;width:16px;height:16px;accent-color:var(--burgundy);" />
+              <span>
+                <b style="color:var(--burgundy);"><i class="fas fa-gift"></i> Premium Gift Wrap</b> <b>+ ₹50</b><br>
+                <span style="font-size:12px;color:var(--muted);">Your order arrives elegantly wrapped in our signature gift packaging — perfect for gifting.</span>
+              </span>
+            </label>
+          </div>
+
           <h3 style="font-size:1.1rem;margin:24px 0 12px;color:var(--burgundy);">Payment Method</h3>
           <div style="border:1px solid var(--line);border-radius:8px;padding:16px;background:linear-gradient(135deg,#fff,var(--cream));">
             <div style="display:flex;align-items:center;gap:12px;">
@@ -360,11 +370,9 @@
               opt.textContent = `${a.name} - ${a.address}, ${a.city} ${a.zip}`;
               select.appendChild(opt);
             });
-            // Auto-fill default address
-            if (addresses[0].is_default) {
-              select.value = addresses[0].id;
-              fillSavedAddress(addresses[0].id);
-            }
+            // Auto-fill best address (default first, else most recent)
+            select.value = addresses[0].id;
+            fillSavedAddress(addresses[0].id);
           }
         } catch { /* ignore */ }
       }
@@ -407,6 +415,7 @@
         <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;"><span>Subtotal</span><span>${fmtINR(t.subtotal)}</span></div>
         ${t.discount > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:var(--success);"><span>Discount</span><span>−${fmtINR(t.discount)}</span></div>` : ''}
         <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:var(--success);display:none;" id="ck-loyalty-row"><span>Loyalty points</span><span id="ck-loyalty-amount"></span></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;display:none;" id="ck-giftwrap-row"><span><i class="fas fa-gift" style="color:var(--burgundy);"></i> Gift wrap</span><span>₹50</span></div>
         <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;" id="ck-ship-row"><span>Shipping <span id="ck-ship-hint" style="font-size:11px;color:var(--muted);"></span></span><span id="ck-ship-amount">${t.shipping === 0 ? 'Free' : fmtINR(t.shipping)}</span></div>
         <div style="display:flex;justify-content:space-between;padding:10px 0 0;border-top:1px solid var(--line);margin-top:8px;font-weight:700;font-size:16px;color:var(--burgundy);" id="ck-total-row"><span>Total</span><span id="ck-total-amount">${fmtINR(t.total)}</span></div>`;
       document.getElementById('ck-pay-label').textContent = `Pay ${fmtINR(t.total)}`;
@@ -456,16 +465,20 @@
     function refreshTotals() {
       const t = cartTotals();
       const ship = liveShipping != null ? liveShipping : t.shipping;
-      const total = Math.max(1, t.subtotal - t.discount + ship - appliedLoyalty);
+      const wrap = document.getElementById('ck-giftwrap')?.checked ? 50 : 0;
+      const total = Math.max(1, t.subtotal - t.discount + ship + wrap - appliedLoyalty);
       const lr = document.getElementById('ck-loyalty-row');
       if (lr) {
         lr.style.display = appliedLoyalty > 0 ? 'flex' : 'none';
         document.getElementById('ck-loyalty-amount').textContent = '−' + fmtINR(appliedLoyalty);
       }
+      const gr = document.getElementById('ck-giftwrap-row');
+      if (gr) gr.style.display = wrap > 0 ? 'flex' : 'none';
       document.getElementById('ck-ship-amount').textContent = ship === 0 ? 'Free' : fmtINR(ship);
       document.getElementById('ck-total-amount').textContent = fmtINR(total);
       document.getElementById('ck-pay-label').textContent = `Pay ${fmtINR(total)}`;
     }
+    document.getElementById('ck-giftwrap')?.addEventListener('change', refreshTotals);
 
     // ----- Live Delhivery shipping calculation when pincode is entered -----
     let liveShipping = null;
@@ -512,7 +525,7 @@
       const a = window.userAddresses.find(x => x.id === id);
       if (!a) return;
       document.getElementById('ck-name').value = a.name || '';
-      document.getElementById('ck-phone').value = a.phone || '';
+      document.getElementById('ck-phone').value = String(a.phone || '').replace(/\D/g, '').slice(-10);
       if (a.email) document.getElementById('ck-email').value = a.email;
       document.getElementById('ck-address').value = a.address || '';
       document.getElementById('ck-city').value = a.city || '';
@@ -534,7 +547,8 @@
 
       const t = cartTotals();
       const ship_amt = liveShipping != null ? liveShipping : t.shipping;
-      const total_amt = Math.max(1, t.subtotal - t.discount + ship_amt - appliedLoyalty);
+      const wrap_amt = document.getElementById('ck-giftwrap')?.checked ? 50 : 0;
+      const total_amt = Math.max(1, t.subtotal - t.discount + ship_amt + wrap_amt - appliedLoyalty);
       const ship = {
         name:    document.getElementById('ck-name').value.trim(),
         phone:   document.getElementById('ck-phone').value.trim(),
@@ -613,6 +627,7 @@
             user_id: state.user?.id || '',
             applied_coupon: state.appliedCoupon?.code || '',
             loyalty_points: appliedLoyalty,
+            gift_wrap: document.getElementById('ck-giftwrap')?.checked || false,
             save_card: document.getElementById('ck-save-card')?.checked || false,
           }),
         });
