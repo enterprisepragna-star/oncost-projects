@@ -1326,7 +1326,7 @@ function renderAccountOrders(orders) {
         ${subtotal ? `<div class="line"><span>Subtotal</span><span>${fmtINR(subtotal)}</span></div>` : ''}
         ${discount > 0 ? `<div class="line" style="color:var(--success);"><span>Discount</span><span>−${fmtINR(discount)}</span></div>` : ''}
         ${loyalty > 0 ? `<div class="line" style="color:var(--success);"><span>Loyalty points used</span><span>−${fmtINR(loyalty)}</span></div>` : ''}
-        ${Number(o.gift_wrap_charge || 0) > 0 ? `<div class="line"><span><i class="fas fa-gift" style="color:var(--burgundy);"></i> Gift wrap</span><span>${fmtINR(o.gift_wrap_charge)}</span></div>` : ''}
+        ${Number(o.gift_wrap_charge || 0) > 0 ? `<div class="line"><span><i class="fas fa-gift" style="color:var(--burgundy);"></i> Gift wrap${o.gift_message ? ' + note' : ''}</span><span>${fmtINR(o.gift_wrap_charge)}</span></div>` : ''}
         ${subtotal ? `<div class="line"><span>Shipping</span><span>${shipping === 0 ? 'Free' : fmtINR(shipping)}</span></div>` : ''}
         <div class="line total"><span>Grand Total</span><span>${fmtINR(o.total_amount)}</span></div>
       </div>

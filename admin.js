@@ -1860,6 +1860,15 @@ function viewOrder(id) {
           ${escapeHTML(ship.country||'India')} · <i class="fas fa-phone"></i> ${escapeHTML(ship.phone||'')}
         </div>
       </div>
+
+      ${o.gift_wrap ? `
+      <!-- GIFT WRAP INSTRUCTIONS (for packing team) -->
+      <div style="background:#FFF8E7;border:1px solid #E8C878;padding:14px 16px;border-radius:8px;grid-column:1/-1;" data-testid="ov-giftwrap">
+        <h4 style="margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:#92600A;"><i class="fas fa-gift"></i> Premium Gift Wrap Ordered (₹${Number(o.gift_wrap_charge || 50)})</h4>
+        ${o.gift_message
+          ? `<div style="font-size:13px;color:var(--admin-ink);line-height:1.5;">Include note card with this message:<br><em style="display:block;background:#fff;border:1px dashed #E8C878;border-radius:6px;padding:10px 12px;margin-top:6px;">"${escapeHTML(o.gift_message)}"</em></div>`
+          : `<div style="font-size:13px;color:var(--admin-text-soft);">Wrap in signature gift packaging. No note card requested.</div>`}
+      </div>` : ''}
     </div>
 
     <!-- SHIPPING / LOGISTICS -->

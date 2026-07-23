@@ -174,7 +174,8 @@ CREATE POLICY "Users manage own addresses" ON public.addresses
 -- 9) GIFT WRAP (premium packaging, +₹50 at checkout) ----------------------------
 ALTER TABLE public.orders
   ADD COLUMN IF NOT EXISTS gift_wrap boolean DEFAULT false,
-  ADD COLUMN IF NOT EXISTS gift_wrap_charge numeric DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS gift_wrap_charge numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS gift_message text;
 
 -- ============================================================================
 -- Done. Summary:

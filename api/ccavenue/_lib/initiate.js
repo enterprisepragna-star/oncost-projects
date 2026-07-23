@@ -117,6 +117,7 @@ module.exports = async function handler(req, res) {
   // Recalculate exact total amount (coupon + loyalty verified server-side, + optional gift wrap)
   const giftWrap = body.gift_wrap === true || body.gift_wrap === 'true';
   const giftWrapCharge = giftWrap ? 50 : 0;
+  const giftMessage = giftWrap ? String(body.gift_message || '').trim().slice(0, 200) : '';
   const finalTotalAmount = Math.max(loyaltyPoints > 0 ? 1 : 0, subtotal - discountAmt + shippingAmt + giftWrapCharge - loyaltyPoints).toFixed(2);
 
   // 1️⃣  Insert pending order in Supabase via service role (bypasses RLS, guaranteed write)
@@ -138,7 +139,7 @@ module.exports = async function handler(req, res) {
         shipping_amount: shippingAmt,
         discount_amount: discountAmt,
         ...(loyaltyPoints > 0 ? { loyalty_points_redeemed: loyaltyPoints, loyalty_discount: loyaltyPoints } : {}),
-        ...(giftWrap ? { gift_wrap: true, gift_wrap_charge: giftWrapCharge } : {}),
+        ...(giftWrap ? { gift_wrap: true, gift_wrap_charge: giftWrapCharge, ...(giftMessage ? { gift_message: giftMessage } : {}) } : {}),
         status: 'Processing',
         payment_status: 'Pending',
         payment_method: 'CCAvenue',

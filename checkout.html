@@ -478,7 +478,14 @@
       document.getElementById('ck-total-amount').textContent = fmtINR(total);
       document.getElementById('ck-pay-label').textContent = `Pay ${fmtINR(total)}`;
     }
-    document.getElementById('ck-giftwrap')?.addEventListener('change', refreshTotals);
+    document.getElementById('ck-giftwrap')?.addEventListener('change', () => {
+      const wrapBox = document.getElementById('ck-giftmsg-wrap');
+      if (wrapBox) wrapBox.style.display = document.getElementById('ck-giftwrap').checked ? 'block' : 'none';
+      refreshTotals();
+    });
+    document.getElementById('ck-giftmsg')?.addEventListener('input', (e) => {
+      document.getElementById('ck-giftmsg-count').textContent = e.target.value.length;
+    });
 
     // ----- Live Delhivery shipping calculation when pincode is entered -----
     let liveShipping = null;
@@ -628,6 +635,7 @@
             applied_coupon: state.appliedCoupon?.code || '',
             loyalty_points: appliedLoyalty,
             gift_wrap: document.getElementById('ck-giftwrap')?.checked || false,
+            gift_message: (document.getElementById('ck-giftwrap')?.checked && document.getElementById('ck-giftmsg')?.value.trim()) || '',
             save_card: document.getElementById('ck-save-card')?.checked || false,
           }),
         });
