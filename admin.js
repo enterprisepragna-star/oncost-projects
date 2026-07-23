@@ -2837,7 +2837,13 @@ function openTestimonialForm(id) {
         </select>
       </div>
       <div class="field" style="grid-column:1/-1"><label>Headline (optional)</label><input class="input" id="te-title" maxlength="80" data-testid="te-title" value="${escapeHTML(t?.title||'')}" placeholder="Loved the packaging!" /></div>
-      <div class="field" style="grid-column:1/-1"><label>Review Text *</label><textarea class="input" id="te-review_text" rows="4" required data-testid="te-review_text" placeholder="What did the customer say?">${escapeHTML(t?.review_text||'')}</textarea></div>
+      <div class="field" style="grid-column:1/-1">
+        <label style="display:flex;justify-content:space-between;align-items:center;">Review Text *
+          <button type="button" class="btn btn-secondary" id="te-polish" data-testid="te-polish" style="padding:4px 12px;font-size:11px;"><i class="fas fa-wand-magic-sparkles"></i> Polish with AI</button>
+        </label>
+        <textarea class="input" id="te-review_text" rows="4" required data-testid="te-review_text" placeholder="What did the customer say?">${escapeHTML(t?.review_text||'')}</textarea>
+        <div style="font-size:11px;color:var(--admin-text-mute);margin-top:4px;">AI improves grammar & professionalism only — never invents details.</div>
+      </div>
       <div class="field"><label>Image URL (optional)</label><input class="input" id="te-image_url" data-testid="te-image_url" value="${escapeHTML(t?.image_url||'')}" placeholder="https://..." /></div>
       <div class="field"><label>Status</label>
         <select class="select" id="te-status" data-testid="te-status">
@@ -2857,6 +2863,26 @@ function openTestimonialForm(id) {
   footer.innerHTML = `<button class="btn btn-secondary" id="te-cancel" data-testid="te-cancel">Cancel</button><button class="btn btn-primary" id="te-save" data-testid="te-save"><i class="fas fa-save"></i> ${isEdit?'Save':'Add Testimonial'}</button>`;
   const m = openModal({ title: isEdit ? 'Edit Testimonial' : 'Add Testimonial', body: html, footer, size: 'lg', testid: 'te' });
   $('te-cancel').onclick = () => m.close();
+  $('te-polish').onclick = async () => {
+    const ta = $('te-review_text');
+    const original = ta.value.trim();
+    if (original.length < 5) return showToast('Enter the review text first.', 'error');
+    const pb = $('te-polish');
+    pb.disabled = true; pb.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Polishing…';
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      const r = await fetch('/api/admin/polish-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ text: original }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.polished) throw new Error(j.error || 'AI polish unavailable (works on the live site after deploy).');
+      ta.value = j.polished;
+      showToast('Polished! Review the text, edit if needed, then save.');
+    } catch (e) { showToast(e.message, 'error'); }
+    pb.disabled = false; pb.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Polish with AI';
+  };
   $('te-save').onclick = async () => {
     const payload = {
       customer_name: $('te-customer_name').value.trim(),

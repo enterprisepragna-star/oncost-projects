@@ -52,9 +52,62 @@ module.exports = async function handler(req, res) {
   if (action === 'cancel-order') return cancelOrder(req, res);
   if (action === 'invoice-pdf') return invoicePdf(req, res);
   if (action === 'coupon-validate' || action === 'validate') return couponValidate(req, res);
+  if (action === 'welcome-offer') return welcomeOffer(req, res);
   res.status(404).json({ error: 'Unknown store action', got: action });
 };
 module.exports.config = { api: { bodyParser: true } };
+
+// ---------------------------------------------------------------------------
+// WELCOME OFFER — one-time coupon for new signups (₹100 off min ₹999, 30 days)
+// ---------------------------------------------------------------------------
+async function welcomeOffer(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
+  const user = await getUserFromToken(req);
+  if (!user || !user.id) return res.status(401).json({ error: 'Sign in required' });
+
+  // Only genuinely new accounts (≤ 14 days old)
+  if (user.created_at && Date.now() - new Date(user.created_at).getTime() > 14 * 86400000) {
+    return res.status(200).json({ ok: true, eligible: false });
+  }
+
+  const profR = await sb(`/rest/v1/profiles?id=eq.${user.id}&select=name,email,welcome_coupon_sent_at&limit=1`);
+  const prof = (Array.isArray(profR.body) && profR.body[0]) || {};
+  if (prof.welcome_coupon_sent_at) return res.status(200).json({ ok: true, already: true });
+
+  const code = 'WELCOME-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+  const expires = new Date(Date.now() + 30 * 86400000).toISOString();
+  const ins = await sb('/rest/v1/coupons', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({
+      code, discount_amount: 100, min_order_value: 999,
+      usage_limit: 1, used_count: 0, expires_at: expires,
+    }),
+  });
+  if (!ins.ok) {
+    console.error('[store/welcome-offer] coupon insert failed:', JSON.stringify(ins.body).slice(0, 300));
+    return res.status(500).json({ error: 'Could not create welcome coupon' });
+  }
+
+  const email = prof.email || user.email;
+  const { SITE_URL } = env();
+  if (email) {
+    fetch(`${SITE_URL}/api/email/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
+      body: JSON.stringify({
+        type: 'welcome_offer', to: email,
+        data: { name: prof.name || 'there', code, amount: 100, min_order: 999, expires: new Date(expires).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) },
+      }),
+    }).catch((e) => console.error('[store/welcome-offer] email failed:', e.message));
+  }
+
+  await sb(`/rest/v1/profiles?id=eq.${user.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ welcome_coupon_sent_at: new Date().toISOString() }),
+  });
+  res.status(200).json({ ok: true, code, amount: 100, min_order: 999 });
+}
 
 // ---------------------------------------------------------------------------
 // COUPON VALIDATE — server-side check against Supabase (used by cart page)

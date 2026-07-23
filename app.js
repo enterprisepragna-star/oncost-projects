@@ -371,6 +371,7 @@ async function renderProductDetail() {
           <span class="price" data-pd-price>${fmtINR(displayPrice)}</span>
           ${offer ? `<span class="price-old" data-pd-price-old>${fmtINR(originalPrice)}</span><span class="save-tag" data-pd-save>Save ${save}%</span>` : ''}
         </div>
+        ${displayPrice >= 10 ? `<div class="earn-points" data-testid="pd-earn-points"><i class="fas fa-coins"></i> Earn <b data-pd-points>${Math.floor(displayPrice / 10)}</b> loyalty points — worth ₹${Math.floor(displayPrice / 10)} off your next order</div>` : ''}
         ${variants.length ? `
           <div class="variant-selector" style="margin:14px 0 18px;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);">
             <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px;">
@@ -508,6 +509,12 @@ async function renderProductDetail() {
         const sel = $('#pd-variant-name'); if (sel) sel.textContent = vv.variant_label;
         const priceEl = $('[data-pd-price]'); if (priceEl) priceEl.textContent = fmtINR(vv.offer_price && vv.offer_price < vv.price ? vv.offer_price : vv.price);
         const oldEl = $('[data-pd-price-old]'); if (oldEl) oldEl.textContent = vv.offer_price && vv.offer_price < vv.price ? fmtINR(vv.price) : '';
+        const ptsWrap = $('[data-testid="pd-earn-points"]');
+        if (ptsWrap) {
+          const vPrice = vv.offer_price && vv.offer_price < vv.price ? vv.offer_price : vv.price;
+          const pts = Math.floor(Number(vPrice) / 10);
+          ptsWrap.innerHTML = `<i class="fas fa-coins"></i> Earn <b data-pd-points>${pts}</b> loyalty points — worth ₹${pts} off your next order`;
+        }
         if (vv.image_url) { const main = $('#pd-main-img'); if (main) main.src = vv.image_url; }
         
         // Update product details table for variant
@@ -729,6 +736,7 @@ function renderCart() {
         ${discount > 0 ? `<div class="line" style="color:var(--success);"><span>Discount (${escapeHTML(state.appliedCoupon.code)})</span><span>−${fmtINR(discount)}</span></div>` : ''}
         <div class="line"><span>Shipping</span><span style="font-size:12px;color:var(--muted);">${subtotal > 999 ? 'Free' : 'Calculated at checkout'}</span></div>
         <div class="line total"><span>Total</span><span>${fmtINR(total)}</span></div>
+        ${total >= 10 ? `<div class="earn-points" style="margin-top:10px;" data-testid="cart-earn-points"><i class="fas fa-coins"></i> You'll earn <b>${Math.floor(total / 10)}</b> loyalty points on this order</div>` : ''}
 
         <div class="coupon">
           <input class="field" id="coupon-input" placeholder="Coupon code" value="${state.appliedCoupon ? escapeHTML(state.appliedCoupon.code) : ''}" />
@@ -1065,7 +1073,97 @@ function maybeShowCompleteProfile() {
     ov.remove();
     toast('Profile saved. Welcome to ONCOST!', 'ok');
     renderAuthState();
+    claimWelcomeOffer();
   });
+}
+
+// One-time welcome coupon for new signups (server validates eligibility)
+function claimWelcomeOffer() {
+  if (!state.user?.created_at) return;
+  if (Date.now() - new Date(state.user.created_at).getTime() > 14 * 86400000) return;
+  supabaseClient.auth.getSession().then(({ data: { session } }) => {
+    if (!session) return;
+    fetch('/api/store/welcome-offer', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    }).then(r => (r.ok ? r.json() : null)).then(j => {
+      if (j?.code) setTimeout(() => toast(`🎁 Welcome gift! Coupon ${j.code} (₹${j.amount} off) sent to your email`, 'ok'), 1200);
+    }).catch(() => {});
+  });
+}
+
+// ---------- UX layer: scroll polish, reveal animations, back-to-top, sticky mobile buy bar ----------
+function initUXEnhancements() {
+  const header = document.querySelector('.site-header');
+
+  // Back-to-top button
+  const backTop = document.createElement('button');
+  backTop.className = 'back-to-top';
+  backTop.setAttribute('aria-label', 'Back to top');
+  backTop.setAttribute('data-testid', 'back-to-top');
+  backTop.innerHTML = '<i class="fas fa-chevron-up"></i>';
+  backTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  document.body.appendChild(backTop);
+
+  let ticking = false;
+  window.addEventListener('scroll', () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const y = window.scrollY;
+      if (header) header.classList.toggle('scrolled', y > 8);
+      backTop.classList.toggle('show', y > 600);
+      ticking = false;
+    });
+  }, { passive: true });
+
+  // Scroll-reveal + sticky buy bar are content-dependent; some renders finish
+  // async after bootstrap, so scan now and re-scan shortly after.
+  applyContentUX();
+  setTimeout(applyContentUX, 1200);
+  setTimeout(applyContentUX, 2800);
+}
+
+function applyContentUX() {
+  // Scroll-reveal with gentle stagger
+  if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!window._revealIO) {
+      window._revealIO = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+          if (e.isIntersecting) { e.target.classList.add('in'); window._revealIO.unobserve(e.target); }
+        });
+      }, { threshold: 0.06, rootMargin: '0px 0px -40px 0px' });
+    }
+    document.querySelectorAll('.product-card, .collection-card, .testimonial-card, .order-card, .loyalty-card').forEach((el, i) => {
+      if (el.classList.contains('reveal')) return;
+      el.classList.add('reveal');
+      el.style.transitionDelay = `${(i % 4) * 70}ms`;
+      window._revealIO.observe(el);
+    });
+  }
+
+  // Sticky mobile buy bar on product detail (CSS hides it on desktop)
+  const atc = document.querySelector('[data-testid="pd-add-cart"]');
+  if (atc && !document.querySelector('.sticky-buy-bar')) {
+    const priceText = document.querySelector('[data-pd-price]')?.textContent || '';
+    const bar = document.createElement('div');
+    bar.className = 'sticky-buy-bar';
+    bar.setAttribute('data-testid', 'sticky-buy-bar');
+    bar.innerHTML = `
+      <div class="sbb-price"><span>${escapeHTML(priceText)}</span><small>incl. all taxes</small></div>
+      <button class="btn primary" data-testid="sticky-add-cart" ${atc.disabled ? 'disabled' : ''}><i class="fas fa-cart-plus"></i> Add to Cart</button>`;
+    bar.querySelector('[data-testid="sticky-add-cart"]').addEventListener('click', () => atc.click());
+    document.body.appendChild(bar);
+    const io2 = new IntersectionObserver((entries) => {
+      bar.classList.toggle('show', !entries[0].isIntersecting);
+    }, { threshold: 0 });
+    io2.observe(atc);
+    // Keep sticky price in sync with variant changes
+    const priceEl = document.querySelector('[data-pd-price]');
+    if (priceEl) new MutationObserver(() => {
+      bar.querySelector('.sbb-price span').textContent = priceEl.textContent;
+    }).observe(priceEl, { childList: true, characterData: true, subtree: true });
+  }
 }
 
 // ---------- Categories ----------
@@ -1693,6 +1791,7 @@ async function bootstrap() {
   fetchAndRenderOffers();
   renderRecentlyViewed();
   maybeShowCompleteProfile();
+  initUXEnhancements();
 function renderRecentlyViewed() {
   const slot = $('[data-recently-viewed]');
   if (!slot) return;

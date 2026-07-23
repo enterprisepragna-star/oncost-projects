@@ -18,7 +18,8 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS email text,
   ADD COLUMN IF NOT EXISTS loyalty_points integer DEFAULT 0,
   ADD COLUMN IF NOT EXISTS lifetime_points_earned integer DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS lifetime_points_redeemed integer DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS lifetime_points_redeemed integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS welcome_coupon_sent_at timestamp with time zone;
 
 -- Backfill emails from auth.users
 UPDATE public.profiles p SET email = u.email

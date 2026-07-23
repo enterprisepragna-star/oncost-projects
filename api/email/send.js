@@ -221,6 +221,30 @@ module.exports = async function handler(req, res) {
       </div>`;
       break;
 
+    case 'welcome_offer':
+      subject = `🎁 Your welcome gift from ONCOST — ₹${data.amount || 100} off!`;
+      html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
+        <div style="background:#7a1f35;color:#f2dd92;padding:28px 24px;border-radius:8px 8px 0 0;text-align:center;">
+          <h2 style="margin:0;font-family:Georgia,serif;font-size:24px;">Welcome to ONCOST!</h2>
+          <p style="margin:6px 0 0;opacity:.85;font-size:13px;">A little gift to get you started</p>
+        </div>
+        <div style="background:#fff;padding:28px 24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
+          <p>Hi ${(data.name || 'there')},</p>
+          <p>Thanks for joining the ONCOST family. Here's <strong>₹${data.amount || 100} off</strong> your first order:</p>
+          <div style="text-align:center;margin:22px 0;">
+            <div style="display:inline-block;background:#fdfaf3;border:2px dashed #7a1f35;border-radius:10px;padding:16px 30px;">
+              <div style="font-family:monospace;font-size:24px;font-weight:800;color:#7a1f35;letter-spacing:2px;">${(data.code || '')}</div>
+              <div style="font-size:11px;color:#7a726b;margin-top:6px;">Min. order ₹${data.min_order || 999} · Valid till ${(data.expires || '30 days')}</div>
+            </div>
+          </div>
+          <p style="text-align:center;"><a href="https://www.oncost.shop/products.html" style="background:#7a1f35;color:#f2dd92;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Start Shopping →</a></p>
+          <p style="font-size:12px;color:#7a726b;">Apply the code at checkout. Plus — earn 1 loyalty point for every ₹10 you spend, redeemable on future orders!</p>
+          <hr style="border:none;border-top:1px solid #e8e0d2;margin:22px 0;">
+          <p style="font-size:12px;color:#7a726b;margin:0;">ONCOST · Premium Gifting · <a href="https://www.oncost.shop" style="color:#7a1f35;">www.oncost.shop</a></p>
+        </div>
+      </div>`;
+      break;
+
     default:
       subject = data.subject || 'Notification from ONCOST';
       html = data.html || `<p>${(data.message || 'You have a new notification.')}</p>`;
