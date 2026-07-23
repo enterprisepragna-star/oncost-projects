@@ -54,6 +54,7 @@
           <button class="admin-nav-link" data-view="testimonials" data-testid="nav-testimonials"><i class="fas fa-star"></i>Testimonials</button>
           <button class="admin-nav-link" data-view="complaints" data-testid="nav-complaints"><i class="fas fa-headset"></i>Complaints <span id="nav-complaints-badge" style="display:none;background:#C0392B;color:#fff;border-radius:999px;font-size:10px;padding:1px 7px;margin-left:6px;font-weight:700;"></span></button>
           <button class="admin-nav-link" data-view="loyalty" data-testid="nav-loyalty"><i class="fas fa-coins"></i>Loyalty</button>
+          <button class="admin-nav-link" data-view="customers" data-testid="nav-customers"><i class="fas fa-users"></i>Customers</button>
         </div>
         <div class="admin-nav-group">
           <div class="admin-nav-group-title">Configuration</div>
@@ -433,6 +434,36 @@
           </div>
         </section>
 
+        <section class="view" data-view-pane="customers">
+          <div class="page-head">
+            <div>
+              <h1 class="page-title">Customer Directory</h1>
+              <p class="page-sub">Every customer and guest buyer — name, mobile, email — ready for your next offer or sale campaign.</p>
+            </div>
+            <button class="btn btn-primary" id="customers-export" data-testid="customers-export"><i class="fas fa-file-csv"></i> Export CSV</button>
+          </div>
+          <div class="kpis" id="customers-kpis" style="margin-bottom:16px;"></div>
+          <div class="card">
+            <div class="card-head" style="gap:12px;flex-wrap:wrap;">
+              <h3 class="card-title">All Customers</h3>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <select class="select" id="customers-type-filter" style="max-width:170px;" data-testid="customers-type-filter">
+                  <option value="">All types</option>
+                  <option value="Registered">Registered</option>
+                  <option value="Guest">Guest buyers</option>
+                </select>
+                <input class="input" id="customers-search" placeholder="Search name, mobile or email…" style="max-width:300px;" data-testid="customers-search" />
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data">
+                <thead><tr><th>Name</th><th>Mobile</th><th>Email</th><th>Type</th><th>Joined / First Seen</th><th style="text-align:right">Orders</th><th style="text-align:right">Lifetime Spend</th><th style="text-align:right">Points</th></tr></thead>
+                <tbody id="customers-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <section class="view" data-view-pane="settings">
           <div class="page-head">
             <div>
@@ -804,6 +835,6 @@
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
-  <script src="admin.js?v=fix-scroll"></script>
+  <script src="admin.js?v=customers-1"></script>
 </body>
 </html>

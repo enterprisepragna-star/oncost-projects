@@ -371,6 +371,7 @@ async function renderProductDetail() {
           <span class="price" data-pd-price>${fmtINR(displayPrice)}</span>
           ${offer ? `<span class="price-old" data-pd-price-old>${fmtINR(originalPrice)}</span><span class="save-tag" data-pd-save>Save ${save}%</span>` : ''}
         </div>
+        ${displayPrice >= 10 ? `<div class="earn-points" data-testid="pd-earn-points"><i class="fas fa-coins"></i> Earn <b data-pd-points>${Math.floor(displayPrice / 10)}</b> loyalty points — worth ₹${Math.floor(displayPrice / 10)} off your next order</div>` : ''}
         ${variants.length ? `
           <div class="variant-selector" style="margin:14px 0 18px;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);">
             <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px;">
@@ -508,6 +509,12 @@ async function renderProductDetail() {
         const sel = $('#pd-variant-name'); if (sel) sel.textContent = vv.variant_label;
         const priceEl = $('[data-pd-price]'); if (priceEl) priceEl.textContent = fmtINR(vv.offer_price && vv.offer_price < vv.price ? vv.offer_price : vv.price);
         const oldEl = $('[data-pd-price-old]'); if (oldEl) oldEl.textContent = vv.offer_price && vv.offer_price < vv.price ? fmtINR(vv.price) : '';
+        const ptsWrap = $('[data-testid="pd-earn-points"]');
+        if (ptsWrap) {
+          const vPrice = vv.offer_price && vv.offer_price < vv.price ? vv.offer_price : vv.price;
+          const pts = Math.floor(Number(vPrice) / 10);
+          ptsWrap.innerHTML = `<i class="fas fa-coins"></i> Earn <b data-pd-points>${pts}</b> loyalty points — worth ₹${pts} off your next order`;
+        }
         if (vv.image_url) { const main = $('#pd-main-img'); if (main) main.src = vv.image_url; }
         
         // Update product details table for variant
@@ -729,6 +736,7 @@ function renderCart() {
         ${discount > 0 ? `<div class="line" style="color:var(--success);"><span>Discount (${escapeHTML(state.appliedCoupon.code)})</span><span>−${fmtINR(discount)}</span></div>` : ''}
         <div class="line"><span>Shipping</span><span style="font-size:12px;color:var(--muted);">${subtotal > 999 ? 'Free' : 'Calculated at checkout'}</span></div>
         <div class="line total"><span>Total</span><span>${fmtINR(total)}</span></div>
+        ${total >= 10 ? `<div class="earn-points" style="margin-top:10px;" data-testid="cart-earn-points"><i class="fas fa-coins"></i> You'll earn <b>${Math.floor(total / 10)}</b> loyalty points on this order</div>` : ''}
 
         <div class="coupon">
           <input class="field" id="coupon-input" placeholder="Coupon code" value="${state.appliedCoupon ? escapeHTML(state.appliedCoupon.code) : ''}" />
@@ -980,6 +988,184 @@ window.openLightbox = function(images, startIdx = 0, alt = '') {
   stage.addEventListener('pointerup', endPointer);
   stage.addEventListener('pointercancel', endPointer);
 };
+
+// ---------- Complete-profile gate (mandatory mobile + email for marketing) ----------
+function maybeShowCompleteProfile() {
+  if (!state.user || state.isAdmin) return;
+  const p = state.profile || {};
+  const meta = state.user.user_metadata || {};
+  const authEmail = state.user.email || '';
+  const bestName = p.name || meta.full_name || meta.name || (authEmail ? authEmail.split('@')[0] : '');
+  const hasPhone = p.phone && String(p.phone).replace(/\D/g, '').length >= 10;
+  const hasEmail = !!(p.email || authEmail);
+
+  // Silently sync auth email/name into the profile for the marketing directory
+  if (hasPhone && hasEmail) {
+    if ((!p.email && authEmail) || !p.name) {
+      supabaseClient.from('profiles').upsert({
+        id: state.user.id,
+        name: bestName || 'Customer',
+        email: p.email || authEmail,
+        phone: p.phone,
+      }).then(({ error }) => {
+        if (error && error.message?.includes('email')) {
+          supabaseClient.from('profiles').upsert({ id: state.user.id, name: bestName || 'Customer', phone: p.phone }).then(() => {});
+        }
+      });
+    }
+    if (!p.welcome_coupon_sent_at) claimWelcomeOffer();
+    return;
+  }
+
+  const ov = document.createElement('div');
+  ov.className = 'cp-overlay';
+  ov.setAttribute('data-testid', 'complete-profile-modal');
+  ov.innerHTML = `
+    <div class="cp-card">
+      <div style="text-align:center;margin-bottom:6px;"><i class="fas fa-user-check" style="font-size:28px;color:var(--gold);"></i></div>
+      <h3 style="text-align:center;margin:0 0 4px;font-size:1.25rem;">Complete your profile</h3>
+      <p style="text-align:center;color:var(--muted);font-size:13px;margin:0 0 18px;">Just once — so we can send order updates and exclusive offers.</p>
+      <div id="cp-err" style="display:none;background:#fbecec;color:var(--error);border:1px solid #e8c1c1;padding:9px;border-radius:6px;font-size:12px;margin-bottom:12px;"></div>
+      <label class="cp-label">Full Name
+        <input class="field" id="cp-name" value="${escapeHTML(bestName)}" placeholder="Your name" data-testid="cp-name" />
+      </label>
+      <label class="cp-label">Mobile Number <span style="color:var(--error);">*</span>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <span style="display:flex;align-items:center;padding:0 12px;background:var(--cream);border:1px solid var(--line);border-radius:8px;font-size:14px;font-weight:600;">+91</span>
+          <input class="field" id="cp-phone" type="tel" maxlength="10" inputmode="numeric" value="${escapeHTML(String(p.phone || '').replace(/^\+?91/, '').replace(/\D/g, '').slice(-10))}" placeholder="10-digit mobile" style="flex:1;margin-top:0;" data-testid="cp-phone" />
+        </div>
+      </label>
+      <label class="cp-label">Email ${authEmail ? '' : '<span style="color:var(--error);">*</span>'}
+        <input class="field" id="cp-email" type="email" value="${escapeHTML(p.email || authEmail)}" ${authEmail ? 'readonly style="margin-top:6px;background:var(--cream);color:var(--muted);"' : 'placeholder="you@example.com"'} data-testid="cp-email" />
+      </label>
+      <button class="btn primary" id="cp-save" style="width:100%;margin-top:16px;" data-testid="cp-save"><i class="fas fa-check"></i> Save & Continue</button>
+      <div style="text-align:center;margin-top:12px;"><button id="cp-logout" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline;">Sign out instead</button></div>
+    </div>`;
+  document.body.appendChild(ov);
+  document.body.style.overflow = 'hidden';
+
+  const showErr = (m) => { const e = ov.querySelector('#cp-err'); e.textContent = m; e.style.display = 'block'; };
+  ov.querySelector('#cp-logout').addEventListener('click', async () => {
+    await supabaseClient.auth.signOut();
+    location.href = 'index.html';
+  });
+  ov.querySelector('#cp-save').addEventListener('click', async () => {
+    const name = ov.querySelector('#cp-name').value.trim();
+    const phone = ov.querySelector('#cp-phone').value.replace(/\D/g, '');
+    const email = ov.querySelector('#cp-email').value.trim().toLowerCase();
+    if (name.length < 2) return showErr('Please enter your full name.');
+    if (!/^[6-9]\d{9}$/.test(phone)) return showErr('Please enter a valid 10-digit Indian mobile number.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showErr('Please enter a valid email address.');
+    const btn = ov.querySelector('#cp-save');
+    btn.disabled = true; btn.innerHTML = 'Saving…';
+    let { error } = await supabaseClient.from('profiles').upsert({
+      id: state.user.id, name, phone: '+91' + phone, email,
+    });
+    if (error && error.message?.includes('email')) {
+      // profiles.email column missing (migration not yet run) — save without it
+      ({ error } = await supabaseClient.from('profiles').upsert({ id: state.user.id, name, phone: '+91' + phone }));
+    }
+    if (error) {
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> Save & Continue';
+      return showErr('Could not save: ' + error.message);
+    }
+    state.profile = { ...(state.profile || {}), name, phone: '+91' + phone, email };
+    document.body.style.overflow = '';
+    ov.remove();
+    toast('Profile saved. Welcome to ONCOST!', 'ok');
+    renderAuthState();
+    claimWelcomeOffer();
+  });
+}
+
+// One-time welcome coupon for new signups (server validates eligibility)
+function claimWelcomeOffer() {
+  if (!state.user?.created_at) return;
+  if (Date.now() - new Date(state.user.created_at).getTime() > 14 * 86400000) return;
+  supabaseClient.auth.getSession().then(({ data: { session } }) => {
+    if (!session) return;
+    fetch('/api/store/welcome-offer', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    }).then(r => (r.ok ? r.json() : null)).then(j => {
+      if (j?.code) setTimeout(() => toast(`🎁 Welcome gift! Coupon ${j.code} (₹${j.amount} off) sent to your email`, 'ok'), 1200);
+    }).catch(() => {});
+  });
+}
+
+// ---------- UX layer: scroll polish, reveal animations, back-to-top, sticky mobile buy bar ----------
+function initUXEnhancements() {
+  const header = document.querySelector('.site-header');
+
+  // Back-to-top button
+  const backTop = document.createElement('button');
+  backTop.className = 'back-to-top';
+  backTop.setAttribute('aria-label', 'Back to top');
+  backTop.setAttribute('data-testid', 'back-to-top');
+  backTop.innerHTML = '<i class="fas fa-chevron-up"></i>';
+  backTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  document.body.appendChild(backTop);
+
+  let ticking = false;
+  window.addEventListener('scroll', () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const y = window.scrollY;
+      if (header) header.classList.toggle('scrolled', y > 8);
+      backTop.classList.toggle('show', y > 600);
+      ticking = false;
+    });
+  }, { passive: true });
+
+  // Scroll-reveal + sticky buy bar are content-dependent; some renders finish
+  // async after bootstrap, so scan now and re-scan shortly after.
+  applyContentUX();
+  setTimeout(applyContentUX, 1200);
+  setTimeout(applyContentUX, 2800);
+}
+
+function applyContentUX() {
+  // Scroll-reveal with gentle stagger
+  if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!window._revealIO) {
+      window._revealIO = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+          if (e.isIntersecting) { e.target.classList.add('in'); window._revealIO.unobserve(e.target); }
+        });
+      }, { threshold: 0.06, rootMargin: '0px 0px -40px 0px' });
+    }
+    document.querySelectorAll('.product-card, .collection-card, .testimonial-card, .order-card, .loyalty-card').forEach((el, i) => {
+      if (el.classList.contains('reveal')) return;
+      el.classList.add('reveal');
+      el.style.transitionDelay = `${(i % 4) * 70}ms`;
+      window._revealIO.observe(el);
+    });
+  }
+
+  // Sticky mobile buy bar on product detail (CSS hides it on desktop)
+  const atc = document.querySelector('[data-testid="pd-add-cart"]');
+  if (atc && !document.querySelector('.sticky-buy-bar')) {
+    const priceText = document.querySelector('[data-pd-price]')?.textContent || '';
+    const bar = document.createElement('div');
+    bar.className = 'sticky-buy-bar';
+    bar.setAttribute('data-testid', 'sticky-buy-bar');
+    bar.innerHTML = `
+      <div class="sbb-price"><span>${escapeHTML(priceText)}</span><small>incl. all taxes</small></div>
+      <button class="btn primary" data-testid="sticky-add-cart" ${atc.disabled ? 'disabled' : ''}><i class="fas fa-cart-plus"></i> Add to Cart</button>`;
+    bar.querySelector('[data-testid="sticky-add-cart"]').addEventListener('click', () => atc.click());
+    document.body.appendChild(bar);
+    const io2 = new IntersectionObserver((entries) => {
+      bar.classList.toggle('show', !entries[0].isIntersecting);
+    }, { threshold: 0 });
+    io2.observe(atc);
+    // Keep sticky price in sync with variant changes
+    const priceEl = document.querySelector('[data-pd-price]');
+    if (priceEl) new MutationObserver(() => {
+      bar.querySelector('.sbb-price span').textContent = priceEl.textContent;
+    }).observe(priceEl, { childList: true, characterData: true, subtree: true });
+  }
+}
 
 // ---------- Categories ----------
 async function loadCategories() {
@@ -1605,6 +1791,8 @@ async function bootstrap() {
   setupEnquiryForm();
   fetchAndRenderOffers();
   renderRecentlyViewed();
+  maybeShowCompleteProfile();
+  initUXEnhancements();
 function renderRecentlyViewed() {
   const slot = $('[data-recently-viewed]');
   if (!slot) return;

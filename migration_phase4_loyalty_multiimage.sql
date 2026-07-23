@@ -18,18 +18,23 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS email text,
   ADD COLUMN IF NOT EXISTS loyalty_points integer DEFAULT 0,
   ADD COLUMN IF NOT EXISTS lifetime_points_earned integer DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS lifetime_points_redeemed integer DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS lifetime_points_redeemed integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS welcome_coupon_sent_at timestamp with time zone;
 
 -- Backfill emails from auth.users
 UPDATE public.profiles p SET email = u.email
 FROM auth.users u WHERE u.id = p.id AND (p.email IS NULL OR p.email = '');
 
--- Keep profile email in sync for new signups
+-- Keep profile email in sync for new signups (email, Google OAuth, etc.)
 CREATE OR REPLACE FUNCTION public.sync_profile_email()
 RETURNS trigger AS $$
 BEGIN
   INSERT INTO public.profiles (id, name, email)
-  VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'name', split_part(NEW.email,'@',1)), NEW.email)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'name', NEW.raw_user_meta_data->>'full_name', split_part(NEW.email,'@',1), 'Customer'),
+    NEW.email
+  )
   ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
   RETURN NEW;
 END;

@@ -22,6 +22,7 @@ const state = {
   testimonials: [],
   complaints: [],
   loyaltyCustomers: [],
+  customers: [],
   inv: [],
   imgbbKey: '',
   selectedProducts: new Set(),
@@ -147,6 +148,7 @@ const VIEW_TITLES = {
   inventory: 'Inventory', import: 'Bulk Import', orders: 'Orders',
   coupons: 'Coupons', sales: 'Sale Events', leads: 'Enquiries',
   testimonials: 'Testimonials', complaints: 'Complaints', loyalty: 'Loyalty Program',
+  customers: 'Customer Directory',
   settings: 'Site Settings',
 };
 
@@ -164,6 +166,7 @@ function goView(view) {
   if (view === 'inventory') renderInventory();
   if (view === 'orders') renderOrders();
   if (view === 'loyalty') loadLoyaltyCustomers().then(renderLoyalty);
+  if (view === 'customers') loadCustomerDirectory().then(renderCustomers);
   if (view === 'dashboard') { renderCharts(); renderLowStockAlert(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -2666,6 +2669,111 @@ window.viewLoyaltyHistory = async function(userId) {
   $('lh-close').onclick = () => m.close();
 };
 
+// ------------------------- Customer Directory -------------------------
+const SPEND_STATUSES = ['Paid', 'Confirmed', 'Packed', 'Shipped', 'Delivered'];
+
+async function loadCustomerDirectory() {
+  try {
+    const [profRes, orderRes] = await Promise.all([
+      supabaseClient.from('profiles').select('*').order('created_at', { ascending: false }).limit(2000),
+      supabaseClient.from('orders').select('user_id,guest_email,guest_phone,shipping_address,total_amount,status,created_at').limit(5000),
+    ]);
+    const profiles = profRes.data || [];
+    const orders = orderRes.data || [];
+
+    const byId = new Map();
+    profiles.forEach(p => byId.set(p.id, {
+      id: p.id, name: p.name || '—', phone: p.phone || '', email: (p.email || '').toLowerCase(),
+      type: 'Registered', joined: p.created_at, orders: 0, spend: 0,
+      points: Number(p.loyalty_points || 0),
+    }));
+    const byEmail = new Map();
+    byId.forEach(c => { if (c.email) byEmail.set(c.email, c); });
+
+    const guests = new Map();
+    for (const o of orders) {
+      const counts = SPEND_STATUSES.includes(o.status);
+      const email = (o.guest_email || '').toLowerCase();
+      let target = (o.user_id && byId.get(o.user_id)) || (email && byEmail.get(email)) || null;
+      if (!target && email) {
+        target = guests.get(email);
+        if (!target) {
+          target = {
+            id: 'guest-' + email, name: (o.shipping_address && o.shipping_address.name) || 'Guest',
+            phone: o.guest_phone || (o.shipping_address && o.shipping_address.phone) || '',
+            email, type: 'Guest', joined: o.created_at, orders: 0, spend: 0, points: 0,
+          };
+          guests.set(email, target);
+        }
+      }
+      if (!target) continue;
+      if (counts) { target.orders += 1; target.spend += Number(o.total_amount || 0); }
+      if (!target.phone && o.guest_phone) target.phone = o.guest_phone;
+      if (new Date(o.created_at) < new Date(target.joined)) target.joined = o.created_at;
+    }
+    state.customers = [...byId.values(), ...guests.values()].sort((a, b) => b.spend - a.spend || new Date(b.joined) - new Date(a.joined));
+  } catch (e) {
+    state.customers = [];
+    showToast('Could not load customers: ' + e.message, 'error');
+  }
+}
+
+function filteredCustomers() {
+  const q = ($('customers-search')?.value || '').toLowerCase().trim();
+  const type = $('customers-type-filter')?.value || '';
+  return (state.customers || []).filter(c =>
+    (!type || c.type === type) &&
+    (!q || (c.name || '').toLowerCase().includes(q) || (c.email || '').includes(q) || (c.phone || '').includes(q))
+  );
+}
+
+function renderCustomers() {
+  const list = state.customers || [];
+  const kpis = $('customers-kpis');
+  if (kpis) {
+    const reg = list.filter(c => c.type === 'Registered').length;
+    const withPhone = list.filter(c => c.phone).length;
+    const withEmail = list.filter(c => c.email).length;
+    kpis.innerHTML = kpi('Total Customers', String(list.length), 'fa-users') +
+      kpi('Registered', String(reg), 'fa-user-check', `${list.length - reg} guest buyers`) +
+      kpi('With Mobile', String(withPhone), 'fa-phone') +
+      kpi('With Email', String(withEmail), 'fa-envelope');
+  }
+  const tbody = $('customers-tbody');
+  if (!tbody) return;
+  const rows = filteredCustomers();
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="ic"><i class="fas fa-users"></i></div><h4>No customers found</h4><p>Customers appear here when they sign up or place an order.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(c => `<tr data-testid="customer-row">
+    <td><strong>${escapeHTML(c.name)}</strong></td>
+    <td style="font-size:12px;">${c.phone ? escapeHTML(c.phone) : '<span style="color:var(--admin-text-mute);">—</span>'}</td>
+    <td style="font-size:12px;">${c.email ? escapeHTML(c.email) : '<span style="color:var(--admin-text-mute);">—</span>'}</td>
+    <td><span class="badge ${c.type === 'Registered' ? 'b-success' : 'b-muted'}">${c.type}</span></td>
+    <td style="font-size:12px;">${new Date(c.joined).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+    <td style="text-align:right;">${c.orders}</td>
+    <td style="text-align:right;font-weight:600;">₹${c.spend.toLocaleString('en-IN')}</td>
+    <td style="text-align:right;">${c.points || 0}</td>
+  </tr>`).join('');
+}
+
+function exportCustomersCSV() {
+  const rows = filteredCustomers();
+  if (!rows.length) return showToast('Nothing to export.', 'error');
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = ['Name,Mobile,Email,Type,Joined,Orders,Lifetime Spend (INR),Loyalty Points']
+    .concat(rows.map(c => [c.name, c.phone, c.email, c.type, new Date(c.joined).toLocaleDateString('en-IN'), c.orders, c.spend, c.points].map(esc).join(',')))
+    .join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `oncost-customers-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`Exported ${rows.length} customers.`);
+}
+
 // ------------------------- Testimonials -------------------------
 async function loadTestimonials() {
   const { data } = await supabaseClient.from('testimonials').select('*').order('created_at', { ascending: false });
@@ -2729,7 +2837,13 @@ function openTestimonialForm(id) {
         </select>
       </div>
       <div class="field" style="grid-column:1/-1"><label>Headline (optional)</label><input class="input" id="te-title" maxlength="80" data-testid="te-title" value="${escapeHTML(t?.title||'')}" placeholder="Loved the packaging!" /></div>
-      <div class="field" style="grid-column:1/-1"><label>Review Text *</label><textarea class="input" id="te-review_text" rows="4" required data-testid="te-review_text" placeholder="What did the customer say?">${escapeHTML(t?.review_text||'')}</textarea></div>
+      <div class="field" style="grid-column:1/-1">
+        <label style="display:flex;justify-content:space-between;align-items:center;">Review Text *
+          <button type="button" class="btn btn-secondary" id="te-polish" data-testid="te-polish" style="padding:4px 12px;font-size:11px;"><i class="fas fa-wand-magic-sparkles"></i> Polish with AI</button>
+        </label>
+        <textarea class="input" id="te-review_text" rows="4" required data-testid="te-review_text" placeholder="What did the customer say?">${escapeHTML(t?.review_text||'')}</textarea>
+        <div style="font-size:11px;color:var(--admin-text-mute);margin-top:4px;">AI improves grammar & professionalism only — never invents details.</div>
+      </div>
       <div class="field"><label>Image URL (optional)</label><input class="input" id="te-image_url" data-testid="te-image_url" value="${escapeHTML(t?.image_url||'')}" placeholder="https://..." /></div>
       <div class="field"><label>Status</label>
         <select class="select" id="te-status" data-testid="te-status">
@@ -2749,6 +2863,26 @@ function openTestimonialForm(id) {
   footer.innerHTML = `<button class="btn btn-secondary" id="te-cancel" data-testid="te-cancel">Cancel</button><button class="btn btn-primary" id="te-save" data-testid="te-save"><i class="fas fa-save"></i> ${isEdit?'Save':'Add Testimonial'}</button>`;
   const m = openModal({ title: isEdit ? 'Edit Testimonial' : 'Add Testimonial', body: html, footer, size: 'lg', testid: 'te' });
   $('te-cancel').onclick = () => m.close();
+  $('te-polish').onclick = async () => {
+    const ta = $('te-review_text');
+    const original = ta.value.trim();
+    if (original.length < 5) return showToast('Enter the review text first.', 'error');
+    const pb = $('te-polish');
+    pb.disabled = true; pb.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Polishing…';
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      const r = await fetch('/api/admin/polish-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ text: original }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.polished) throw new Error(j.error || 'AI polish unavailable (works on the live site after deploy).');
+      ta.value = j.polished;
+      showToast('Polished! Review the text, edit if needed, then save.');
+    } catch (e) { showToast(e.message, 'error'); }
+    pb.disabled = false; pb.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Polish with AI';
+  };
   $('te-save').onclick = async () => {
     const payload = {
       customer_name: $('te-customer_name').value.trim(),
@@ -2967,6 +3101,9 @@ function setupSearches() {
   $('orders-status-filter').addEventListener('change', renderOrders);
   $('complaints-status-filter')?.addEventListener('change', renderComplaints);
   let lt; $('loyalty-search')?.addEventListener('input', () => { clearTimeout(lt); lt = setTimeout(renderLoyalty, 200); });
+  let ct; $('customers-search')?.addEventListener('input', () => { clearTimeout(ct); ct = setTimeout(renderCustomers, 200); });
+  $('customers-type-filter')?.addEventListener('change', renderCustomers);
+  $('customers-export')?.addEventListener('click', exportCustomersCSV);
 
   // Products "select all on page" header checkbox
   $('products-check-all').addEventListener('change', (e) => {
