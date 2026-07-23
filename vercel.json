@@ -9,7 +9,15 @@
     { "source": "/api/whatsapp/:action", "destination": "/api/whatsapp?action=:action" },
     { "source": "/api/reviews/:action", "destination": "/api/reviews?action=:action" },
     { "source": "/api/admin/:action", "destination": "/api/admin?action=:action" },
-    { "source": "/api/ccavenue/:action", "destination": "/api/ccavenue?action=:action" }
+    { "source": "/api/store/:action", "destination": "/api/store?action=:action" },
+    { "source": "/api/coupons/validate", "destination": "/api/store?action=coupon-validate" },
+    { "source": "/api/ccavenue/:action", "destination": "/api/ccavenue?action=:action" },
+    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
+    { "source": "/search", "destination": "/products.html" },
+    { "source": "/about-us", "destination": "/about-us.html" },
+    { "source": "/contact-us", "destination": "/contact-us.html" },
+    { "source": "/corporate-gifting", "destination": "/corporate-gifting.html" },
+    { "source": "/return-gifts", "destination": "/return-gifts.html" }
   ],
   "crons": [
     {

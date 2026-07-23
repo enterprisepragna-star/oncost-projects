@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Corporate Gifting · ONCOST</title>
+  <meta name="description" content="Corporate gifting solutions in India — employee gifts, client hampers, Diwali boxes, conference giveaways. GST-billed, custom packaging, pan-India delivery. From 50 pieces to 5,000+." />
+  <link rel="stylesheet" href="storefront.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-client.js"></script>
+  <script defer src="/seo.js"></script>
+</head>
+<body>
+  <div id="sale-banner" class="sale-banner"></div>
+  <div class="topbar"><span><i class="fas fa-briefcase"></i> Corporate</span><span><i class="fas fa-file-invoice"></i> GST Invoice</span><span><i class="fas fa-truck-fast"></i> Pan India</span></div>
+  <header class="site-header">
+    <a class="logo" href="index.html">ONCOST</a>
+    <nav class="desktop-nav">
+      <a href="index.html">Home</a>
+      <a href="products.html">Shop</a>
+      <a href="corporate-gifting.html" class="active">Corporate</a>
+      <a href="return-gifts.html">Return Gifts</a>
+      <a href="about-us.html">About</a>
+      <a href="contact-us.html">Contact</a>
+    </nav>
+    <div class="header-actions">
+      <a class="icon-btn" href="cart.html" data-cart-count><i class="fas fa-cart-shopping"></i></a>
+      <a class="icon-btn" href="account.html" data-account-link><i class="fas fa-user"></i></a>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-hero">
+      <div>
+        <span class="eyebrow">B2B gifting</span>
+        <h1>Corporate gifting that feels personal</h1>
+        <p>Employee welcome kits, client Diwali hampers, conference giveaways, milestone awards — premium craft, your branding, one invoice.</p>
+      </div>
+      <a class="btn secondary" href="bulk.html"><i class="fas fa-paper-plane"></i> Get Quote</a>
+    </section>
+
+    <section class="section" style="max-width:1080px;margin:0 auto;">
+      <h2 style="font-family:Georgia,serif;color:var(--burgundy);text-align:center;">Use cases we ship every week</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-top:24px;">
+        <div style="background:var(--cream);padding:22px;border-radius:var(--radius);border:1px solid var(--line);"><i class="fas fa-user-tie" style="font-size:22px;color:var(--burgundy);"></i><h3 style="font-size:17px;margin:10px 0 4px;color:var(--burgundy);">Employee Onboarding</h3><p style="font-size:13px;color:var(--ink-soft);margin:0;">Welcome kits that say "we're glad you're here" from Day 1.</p></div>
+        <div style="background:var(--cream);padding:22px;border-radius:var(--radius);border:1px solid var(--line);"><i class="fas fa-handshake" style="font-size:22px;color:var(--burgundy);"></i><h3 style="font-size:17px;margin:10px 0 4px;color:var(--burgundy);">Client Appreciation</h3><p style="font-size:13px;color:var(--ink-soft);margin:0;">Festive hampers, year-end gifts, project closure kits.</p></div>
+        <div style="background:var(--cream);padding:22px;border-radius:var(--radius);border:1px solid var(--line);"><i class="fas fa-bullhorn" style="font-size:22px;color:var(--burgundy);"></i><h3 style="font-size:17px;margin:10px 0 4px;color:var(--burgundy);">Conference Giveaways</h3><p style="font-size:13px;color:var(--ink-soft);margin:0;">Branded keepsakes attendees actually keep on their desk.</p></div>
+        <div style="background:var(--cream);padding:22px;border-radius:var(--radius);border:1px solid var(--line);"><i class="fas fa-trophy" style="font-size:22px;color:var(--burgundy);"></i><h3 style="font-size:17px;margin:10px 0 4px;color:var(--burgundy);">Recognition & Awards</h3><p style="font-size:13px;color:var(--ink-soft);margin:0;">Engraved brass mementos, work-anniversary boxes.</p></div>
+        <div style="background:var(--cream);padding:22px;border-radius:var(--radius);border:1px solid var(--line);"><i class="fas fa-fire-flame-curved" style="font-size:22px;color:var(--burgundy);"></i><h3 style="font-size:17px;margin:10px 0 4px;color:var(--burgundy);">Festive Hampers</h3><p style="font-size:13px;color:var(--ink-soft);margin:0;">Diwali, Pongal, Eid, Christmas — curated regionally relevant gifts.</p></div>
+        <div style="background:var(--cream);padding:22px;border-radius:var(--radius);border:1px solid var(--line);"><i class="fas fa-people-group" style="font-size:22px;color:var(--burgundy);"></i><h3 style="font-size:17px;margin:10px 0 4px;color:var(--burgundy);">Offsite & Townhall</h3><p style="font-size:13px;color:var(--ink-soft);margin:0;">Custom kits for 50 to 5,000 attendees, delivered to one or many cities.</p></div>
+      </div>
+
+      <h2 style="font-family:Georgia,serif;color:var(--burgundy);margin-top:48px;">How we work</h2>
+      <ol style="font-size:15px;line-height:1.85;color:var(--ink-soft);padding-left:22px;">
+        <li><strong>Brief</strong> — Tell us occasion, headcount, budget per piece, and any branding requirements.</li>
+        <li><strong>Curate</strong> — Within 24 hours we'll send 3-5 curated options with photos & GST-inclusive pricing.</li>
+        <li><strong>Sample</strong> — Optional: we ship 1-2 samples for sign-off before bulk production.</li>
+        <li><strong>Produce & Pack</strong> — Custom packaging, your logo printing, individual gift tags if needed.</li>
+        <li><strong>Deliver</strong> — One location or 200 — we handle the logistics via Delhivery with tracking links.</li>
+        <li><strong>Invoice</strong> — Single GST-compliant tax invoice for your accounts.</li>
+      </ol>
+
+      <div style="margin-top:40px;padding:32px;background:var(--burgundy);color:var(--cream);border-radius:var(--radius);text-align:center;">
+        <h2 style="font-family:Georgia,serif;color:var(--gold);margin:0 0 8px;">Ready to brief us?</h2>
+        <p style="margin:0 0 20px;opacity:.9;">Share your requirement — quote in 24 hours, no minimum spend to ask.</p>
+        <a class="btn secondary" href="bulk.html"><i class="fas fa-paper-plane"></i> Submit Bulk Enquiry</a>
+        <a class="btn outline" href="https://wa.me/919059424167?text=Hi%20ONCOST%2C%20I%20want%20a%20corporate%20gifting%20quote" target="_blank" rel="noopener" style="margin-left:8px;background:transparent;color:var(--gold);border-color:var(--gold);"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div class="footer-col"><div class="brand">ONCOST</div><p>Premium gifting collections for every occasion.</p>
+        <div class="social-row">
+          <a href="https://www.instagram.com/oncost_store/" target="_blank" rel="noopener"><i class="fab fa-instagram"></i></a>
+          <a href="https://www.facebook.com/profile.php?id=61585630141363" target="_blank" rel="noopener"><i class="fab fa-facebook-f"></i></a>
+          <a href="https://wa.me/919059424167" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i></a>
+        </div>
+      </div>
+      <div class="footer-col"><h4>Shop</h4><ul><li><a href="products.html">All Products</a></li><li><a href="corporate-gifting.html">Corporate Gifting</a></li><li><a href="return-gifts.html">Return Gifts</a></li><li><a href="bulk.html">Bulk Orders</a></li></ul></div>
+      <div class="footer-col"><h4>Company</h4><ul><li><a href="about-us.html">About Us</a></li><li><a href="contact-us.html">Contact Us</a></li><li><a href="support.html">Support</a></li></ul></div>
+      <div class="footer-col"><h4>Account</h4><ul><li><a href="login.html">Sign in</a></li><li><a href="signup.html">Sign up</a></li><li><a href="account.html">My Orders</a></li></ul></div>
+    </div>
+    <div class="footer-bottom"><div>© <span id="copy-year"></span> ONCOST · Pragna Enterprise, Hyderabad.</div><div><a class="admin-link" href="admin-dashboard.html"><i class="fas fa-shield-halved"></i> Admin Console</a></div></div>
+  </footer>
+
+  <script>document.getElementById('copy-year').textContent = new Date().getFullYear();</script>
+  <script src="app.js"></script>
+</body>
+</html>

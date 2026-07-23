@@ -396,19 +396,76 @@
       const t = cartTotals();
       document.getElementById('ck-items').innerHTML = state.cart.map(it => {
         if (!it.product) return '';
-        const eff = (it.product.offer_price && it.product.offer_price < it.product.price) ? it.product.offer_price : it.product.price;
+        const eff = it.unit_price != null ? Number(it.unit_price)
+                  : ((it.product.offer_price && it.product.offer_price < it.product.price) ? it.product.offer_price : it.product.price);
         return `<div style="display:flex;justify-content:space-between;padding:6px 0;">
-          <div style="min-width:0;"><div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;">${escapeHTML(it.product.name)}</div><div style="color:var(--muted);font-size:11px;">Qty ${it.qty}</div></div>
+          <div style="min-width:0;"><div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;">${escapeHTML(it.product.name)}${it.variant_label ? ' · ' + escapeHTML(it.variant_label) : ''}</div><div style="color:var(--muted);font-size:11px;">Qty ${it.qty}</div></div>
           <div style="font-weight:600;">${fmtINR(eff * it.qty)}</div>
         </div>`;
       }).join('');
       document.getElementById('ck-totals').innerHTML = `
         <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;"><span>Subtotal</span><span>${fmtINR(t.subtotal)}</span></div>
         ${t.discount > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:var(--success);"><span>Discount</span><span>−${fmtINR(t.discount)}</span></div>` : ''}
+        <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:var(--success);display:none;" id="ck-loyalty-row"><span>Loyalty points</span><span id="ck-loyalty-amount"></span></div>
         <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;" id="ck-ship-row"><span>Shipping <span id="ck-ship-hint" style="font-size:11px;color:var(--muted);"></span></span><span id="ck-ship-amount">${t.shipping === 0 ? 'Free' : fmtINR(t.shipping)}</span></div>
         <div style="display:flex;justify-content:space-between;padding:10px 0 0;border-top:1px solid var(--line);margin-top:8px;font-weight:700;font-size:16px;color:var(--burgundy);" id="ck-total-row"><span>Total</span><span id="ck-total-amount">${fmtINR(t.total)}</span></div>`;
       document.getElementById('ck-pay-label').textContent = `Pay ${fmtINR(t.total)}`;
+
+      // ----- Loyalty redemption (logged-in customers with points) -----
+      const balance = Math.max(0, Math.floor(Number(state.profile?.loyalty_points || 0)));
+      if (state.user && balance > 0) {
+        const maxRedeem = Math.min(balance, Math.floor(t.subtotal * 0.5));
+        if (maxRedeem > 0) {
+          const box = document.createElement('div');
+          box.className = 'ck-loyalty';
+          box.innerHTML = `
+            <h4><i class="fas fa-coins"></i> You have ${balance.toLocaleString('en-IN')} loyalty points (worth ${fmtINR(balance)})</h4>
+            <div style="font-size:11px;color:var(--muted);">Redeem up to ${maxRedeem.toLocaleString('en-IN')} points on this order (max 50% of order value).</div>
+            <div class="row">
+              <input class="field" id="ck-loyalty-input" type="number" min="0" max="${maxRedeem}" placeholder="Points to redeem" data-testid="ck-loyalty-input" />
+              <button type="button" class="btn outline sm" id="ck-loyalty-apply" data-testid="ck-loyalty-apply">Apply</button>
+            </div>
+            <div id="ck-loyalty-msg" style="font-size:11px;margin-top:6px;"></div>`;
+          document.getElementById('ck-totals').parentElement.appendChild(box);
+          document.getElementById('ck-loyalty-apply').addEventListener('click', () => {
+            const btn = document.getElementById('ck-loyalty-apply');
+            if (appliedLoyalty > 0) {
+              appliedLoyalty = 0;
+              document.getElementById('ck-loyalty-input').value = '';
+              btn.textContent = 'Apply';
+              document.getElementById('ck-loyalty-msg').textContent = '';
+              refreshTotals();
+              return;
+            }
+            const v = Math.floor(Number(document.getElementById('ck-loyalty-input').value || 0));
+            const msg = document.getElementById('ck-loyalty-msg');
+            if (v <= 0) { msg.textContent = 'Enter the number of points to redeem.'; msg.style.color = '#C0392B'; return; }
+            if (v > maxRedeem) { msg.textContent = `Maximum ${maxRedeem} points can be used on this order.`; msg.style.color = '#C0392B'; return; }
+            appliedLoyalty = v;
+            btn.textContent = 'Remove';
+            msg.textContent = `✓ ${v.toLocaleString('en-IN')} points applied (−${fmtINR(v)})`;
+            msg.style.color = '#1E5631';
+            refreshTotals();
+          });
+        }
+      }
     });
+
+    // ----- Unified totals refresh (shipping + loyalty aware) -----
+    let appliedLoyalty = 0;
+    function refreshTotals() {
+      const t = cartTotals();
+      const ship = liveShipping != null ? liveShipping : t.shipping;
+      const total = Math.max(1, t.subtotal - t.discount + ship - appliedLoyalty);
+      const lr = document.getElementById('ck-loyalty-row');
+      if (lr) {
+        lr.style.display = appliedLoyalty > 0 ? 'flex' : 'none';
+        document.getElementById('ck-loyalty-amount').textContent = '−' + fmtINR(appliedLoyalty);
+      }
+      document.getElementById('ck-ship-amount').textContent = ship === 0 ? 'Free' : fmtINR(ship);
+      document.getElementById('ck-total-amount').textContent = fmtINR(total);
+      document.getElementById('ck-pay-label').textContent = `Pay ${fmtINR(total)}`;
+    }
 
     // ----- Live Delhivery shipping calculation when pincode is entered -----
     let liveShipping = null;
@@ -436,12 +493,9 @@
         window.shippingNotServiceable = false;
         payBtn.disabled = false;
         liveShipping = Number(j.shipping_amount || 79);
-        const t = cartTotals();
-        const newTotal = Math.max(0, t.subtotal - t.discount + liveShipping);
-        document.getElementById('ck-ship-amount').textContent = liveShipping === 0 ? 'Free' : fmtINR(liveShipping);
-        document.getElementById('ck-total-amount').textContent = fmtINR(newTotal);
-        document.getElementById('ck-pay-label').textContent = `Pay ${fmtINR(newTotal)}`;
-        hint.innerHTML = `<span style="color:#1E5631;font-size:11px;">${j.district || j.state || 'Live rate'} · ${totalWeight}g</span>`;
+        refreshTotals();
+        const totalWeightLabel = totalWeight;
+        hint.innerHTML = `<span style="color:#1E5631;font-size:11px;">${j.district || j.state || 'Live rate'} · ${totalWeightLabel}g</span>`;
       } catch (e) {
         hint.innerHTML = '<span style="color:var(--muted);">flat rate</span>';
         window.shippingNotServiceable = false;
@@ -480,7 +534,7 @@
 
       const t = cartTotals();
       const ship_amt = liveShipping != null ? liveShipping : t.shipping;
-      const total_amt = Math.max(0, t.subtotal - t.discount + ship_amt);
+      const total_amt = Math.max(1, t.subtotal - t.discount + ship_amt - appliedLoyalty);
       const ship = {
         name:    document.getElementById('ck-name').value.trim(),
         phone:   document.getElementById('ck-phone').value.trim(),
@@ -558,6 +612,7 @@
             shipping_address: ship,
             user_id: state.user?.id || '',
             applied_coupon: state.appliedCoupon?.code || '',
+            loyalty_points: appliedLoyalty,
             save_card: document.getElementById('ck-save-card')?.checked || false,
           }),
         });

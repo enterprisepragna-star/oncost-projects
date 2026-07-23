@@ -53,6 +53,7 @@
           <button class="admin-nav-link" data-view="leads" data-testid="nav-leads"><i class="fas fa-envelope"></i>Enquiries</button>
           <button class="admin-nav-link" data-view="testimonials" data-testid="nav-testimonials"><i class="fas fa-star"></i>Testimonials</button>
           <button class="admin-nav-link" data-view="complaints" data-testid="nav-complaints"><i class="fas fa-headset"></i>Complaints <span id="nav-complaints-badge" style="display:none;background:#C0392B;color:#fff;border-radius:999px;font-size:10px;padding:1px 7px;margin-left:6px;font-weight:700;"></span></button>
+          <button class="admin-nav-link" data-view="loyalty" data-testid="nav-loyalty"><i class="fas fa-coins"></i>Loyalty</button>
         </div>
         <div class="admin-nav-group">
           <div class="admin-nav-group-title">Configuration</div>
@@ -410,6 +411,28 @@
         </section>
 
         <!-- ============ SITE SETTINGS ============ -->
+        <section class="view" data-view-pane="loyalty">
+          <div class="page-head">
+            <div>
+              <h1 class="page-title">Loyalty Program</h1>
+              <p class="page-sub">₹10 spent = 1 point · Redeemable up to 50% of order value · Auto-credited on delivery.</p>
+            </div>
+          </div>
+          <div class="kpis" id="loyalty-kpis" style="margin-bottom:16px;"></div>
+          <div class="card">
+            <div class="card-head" style="gap:12px;flex-wrap:wrap;">
+              <h3 class="card-title">Customers</h3>
+              <input class="input" id="loyalty-search" placeholder="Search by name, email or phone…" style="max-width:320px;" data-testid="loyalty-search" />
+            </div>
+            <div class="table-wrap">
+              <table class="data">
+                <thead><tr><th>Customer</th><th>Email</th><th>Phone</th><th style="text-align:right">Balance</th><th style="text-align:right">Lifetime Earned</th><th style="text-align:right">Redeemed</th><th style="width:120px;">Actions</th></tr></thead>
+                <tbody id="loyalty-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <section class="view" data-view-pane="settings">
           <div class="page-head">
             <div>
@@ -727,6 +750,8 @@
             <div class="grid-2">
               <div class="field"><label>WhatsApp Number</label><input class="input" id="set-whatsapp_number" placeholder="+91XXXXXXXXXX" /></div>
               <div class="field"><label>WhatsApp Default Message</label><input class="input" id="set-whatsapp_text" /></div>
+              <div class="field"><label>Support Phone <span style="font-weight:400;color:var(--admin-text-mute);font-size:11px;">(shown on complaint page)</span></label><input class="input" id="set-support_phone" placeholder="+91-XXXXXXXXXX" data-testid="set-support_phone" /></div>
+              <div class="field"><label>Support Email <span style="font-weight:400;color:var(--admin-text-mute);font-size:11px;">(shown on complaint page)</span></label><input class="input" id="set-support_email" type="email" placeholder="support@oncost.shop" data-testid="set-support_email" /></div>
               <div class="field"><label>Instagram URL</label><input class="input" id="set-instagram_url" /></div>
               <div class="field"><label>Facebook URL</label><input class="input" id="set-facebook_url" /></div>
               <div class="field"><label>YouTube URL</label><input class="input" id="set-youtube_url" /></div>

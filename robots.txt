@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin-dashboard.html
+Disallow: /admin-login.html
+Disallow: /api/
+Disallow: /thank-you.html
+Disallow: /checkout.html
+
+Sitemap: https://www.oncost.shop/sitemap.xml

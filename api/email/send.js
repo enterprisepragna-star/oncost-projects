@@ -181,6 +181,46 @@ module.exports = async function handler(req, res) {
       </div>`;
       break;
 
+    case 'complaint_admin_notify':
+      recipient = ADMIN_EMAIL;
+      subject = `🛎️ New complaint ${data.ticket || ''} — ${data.category || ''}`;
+      html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
+        <div style="background:#7a1f35;color:#f2dd92;padding:18px 24px;border-radius:8px 8px 0 0;">
+          <h2 style="margin:0;font-family:Georgia,serif;">New Complaint · ${(data.ticket||'')}</h2>
+          <p style="margin:4px 0 0;opacity:.85;font-size:13px;">${new Date().toLocaleString('en-IN')}</p>
+        </div>
+        <div style="background:#fff;padding:24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
+          <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <tr><td style="padding:6px 0;color:#7a726b;width:120px;">Customer:</td><td><strong>${(data.name||'—')}</strong></td></tr>
+            <tr><td style="padding:6px 0;color:#7a726b;">Email:</td><td>${(data.email||'—')}</td></tr>
+            <tr><td style="padding:6px 0;color:#7a726b;">Phone:</td><td>${(data.phone||'—')}</td></tr>
+            <tr><td style="padding:6px 0;color:#7a726b;">Order:</td><td>${(data.order_id||'—')}</td></tr>
+            <tr><td style="padding:6px 0;color:#7a726b;">Category:</td><td><strong>${(data.category||'—')}</strong></td></tr>
+            <tr><td style="padding:6px 0;color:#7a726b;">Subject:</td><td>${(data.subject||'—')}</td></tr>
+            <tr><td style="padding:6px 0;color:#7a726b;vertical-align:top;">Description:</td><td style="white-space:pre-wrap;background:#fdfaf3;padding:10px;border-radius:6px;">${(data.description||'—')}</td></tr>
+          </table>
+          <p style="margin-top:18px;"><a href="https://www.oncost.shop/admin-dashboard.html" style="background:#7a1f35;color:#f2dd92;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600;font-size:13px;">Open Complaints Dashboard →</a></p>
+        </div>
+      </div>`;
+      break;
+
+    case 'complaint_ack':
+      subject = `We received your complaint · ${data.ticket || ''}`;
+      html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
+        <div style="background:#7a1f35;color:#f2dd92;padding:24px;border-radius:8px 8px 0 0;text-align:center;">
+          <h2 style="margin:0;font-family:Georgia,serif;">We're on it!</h2>
+        </div>
+        <div style="background:#fff;padding:24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
+          <p>Hi ${(data.name || 'Customer')},</p>
+          <p>Thank you for reaching out. Your complaint <strong>"${(data.subject||'')}"</strong> has been registered with ticket number:</p>
+          <p style="text-align:center;margin:18px 0;"><span style="font-family:monospace;font-size:18px;background:#fdfaf3;border:1px dashed #7a1f35;color:#7a1f35;padding:10px 18px;border-radius:8px;font-weight:700;">${(data.ticket||'')}</span></p>
+          <p>Our support team will get back to you within <strong>24 hours</strong>. Please keep this ticket number handy for any follow-ups.</p>
+          <hr style="border:none;border-top:1px solid #e8e0d2;margin:24px 0;">
+          <p style="font-size:12px;color:#7a726b;margin:0;">ONCOST Customer Care · <a href="https://www.oncost.shop" style="color:#7a1f35;">www.oncost.shop</a></p>
+        </div>
+      </div>`;
+      break;
+
     default:
       subject = data.subject || 'Notification from ONCOST';
       html = data.html || `<p>${(data.message || 'You have a new notification.')}</p>`;

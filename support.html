@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-client.js"></script>
+  <script src="seo.js" defer></script>
 </head>
 <body>
   <div id="sale-banner" class="sale-banner"></div>
@@ -331,13 +332,13 @@
         </form>
 
         <div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-          <div style="background:var(--cream);padding:16px 18px;border-radius:var(--radius);">
+          <div style="background:var(--cream);padding:16px 18px;border-radius:var(--radius);" id="support-phone-card">
             <h4 style="margin:0 0 6px;color:var(--burgundy);font-size:14px;"><i class="fas fa-phone"></i> Phone</h4>
-            <p style="margin:0;font-size:13px;color:var(--muted);">+91-9999999999 (10am – 7pm IST)</p>
+            <p style="margin:0;font-size:13px;color:var(--muted);" id="support-phone-text" data-testid="support-phone">Loading…</p>
           </div>
-          <div style="background:var(--cream);padding:16px 18px;border-radius:var(--radius);">
-            <h4 style="margin:0 0 6px;color:var(--burgundy);font-size:14px;"><i class="fab fa-whatsapp"></i> WhatsApp</h4>
-            <p style="margin:0;font-size:13px;color:var(--muted);">Fastest response. Tap <i class="fab fa-whatsapp"></i> at bottom-right.</p>
+          <div style="background:var(--cream);padding:16px 18px;border-radius:var(--radius);" id="support-email-card">
+            <h4 style="margin:0 0 6px;color:var(--burgundy);font-size:14px;"><i class="fas fa-envelope"></i> Email</h4>
+            <p style="margin:0;font-size:13px;color:var(--muted);" id="support-email-text" data-testid="support-email">Loading…</p>
           </div>
         </div>
       </div>
@@ -366,6 +367,19 @@
     supabaseClient.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) document.getElementById('cmp-email').value = user.email;
       if (user?.user_metadata?.name) document.getElementById('cmp-name').value = user.user_metadata.name;
+    });
+
+    // Load real support contact info from Admin Settings
+    supabaseClient.from('site_settings').select('*').limit(1).then(({ data }) => {
+      const s = (data && data[0]) || {};
+      const phone = s.support_phone || s.whatsapp_number || '';
+      const email = s.support_email || '';
+      const phoneEl = document.getElementById('support-phone-text');
+      const emailEl = document.getElementById('support-email-text');
+      if (phone) phoneEl.innerHTML = `<a href="tel:${phone.replace(/[^+\d]/g,'')}" style="color:var(--burgundy);font-weight:600;text-decoration:none;">${phone}</a> (10am – 7pm IST)`;
+      else { phoneEl.textContent = ''; document.getElementById('support-phone-card').style.display = 'none'; }
+      if (email) emailEl.innerHTML = `<a href="mailto:${email}" style="color:var(--burgundy);font-weight:600;text-decoration:none;">${email}</a>`;
+      else emailEl.innerHTML = 'Use the form above — we reply within 24 hours.';
     });
 
     // File preview
@@ -402,6 +416,16 @@
       document.getElementById('cmp-error').style.display = 'none';
 
       try {
+        // Client-side validation
+        const name = document.getElementById('cmp-name').value.trim();
+        const email = document.getElementById('cmp-email').value.trim();
+        const phone = document.getElementById('cmp-phone').value.trim();
+        const description = document.getElementById('cmp-description').value.trim();
+        if (name.length < 2) throw new Error('Please enter your full name.');
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Please enter a valid email address.');
+        if (phone && !/^[+\d][\d\s-]{7,15}$/.test(phone)) throw new Error('Please enter a valid mobile number.');
+        if (description.length < 20) throw new Error('Please describe the issue in at least 20 characters.');
+
         // Upload attachments to Supabase Storage (best-effort)
         const attachmentUrls = [];
         for (const f of attachments) {
@@ -416,42 +440,30 @@
           } catch (_) { /* skip failed upload */ }
         }
 
-        // Look up order_id from CCAvenue order_id if provided
-        let orderUuid = null;
-        const orderInput = document.getElementById('cmp-order').value.trim();
-        if (orderInput) {
-          const { data: orders } = await supabaseClient
-            .from('orders')
-            .select('id')
-            .or(`id.eq.${orderInput.match(/^[0-9a-f-]{36}$/i)?orderInput:'00000000-0000-0000-0000-000000000000'},ccavenue_order_id.eq.${orderInput}`)
-            .limit(1);
-          if (orders && orders[0]) orderUuid = orders[0].id;
-        }
-
         const { data: { user } } = await supabaseClient.auth.getUser();
-        const payload = {
-          user_id: user?.id || null,
-          order_id: orderUuid,
-          guest_email: document.getElementById('cmp-email').value.trim(),
-          guest_phone: document.getElementById('cmp-phone').value.trim() || null,
-          customer_name: document.getElementById('cmp-name').value.trim(),
-          category: document.getElementById('cmp-category').value,
-          subject: document.getElementById('cmp-subject').value.trim(),
-          description: document.getElementById('cmp-description').value.trim(),
-          attachments: attachmentUrls,
-          status: 'Open',
-          priority: 'Normal',
-        };
-
-        const { data, error } = await supabaseClient.from('complaints').insert(payload).select().single();
-        if (error) throw error;
+        const r = await fetch('/api/store/complaint-submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: user?.id || null,
+            order_id: document.getElementById('cmp-order').value.trim(),
+            email, phone,
+            customer_name: name,
+            category: document.getElementById('cmp-category').value,
+            subject: document.getElementById('cmp-subject').value.trim(),
+            description,
+            attachments: attachmentUrls,
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || 'Could not submit. Please try again.');
 
         document.getElementById('cmp-form').style.display = 'none';
         document.getElementById('cmp-success').style.display = 'block';
-        document.getElementById('cmp-ticket').textContent = data.ticket_number || 'CMP-' + data.id.substring(0,8);
+        document.getElementById('cmp-ticket').textContent = j.ticket_number;
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (err) {
-        showErr(err.message?.includes('complaints') ? 'Run migration_phase1.sql in Supabase first.' : (err.message || 'Could not submit.'));
+        showErr(err.message || 'Could not submit.');
         btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Ticket';
       }
     });

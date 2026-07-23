@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Return Gifts · Wedding, Birthday, Pooja · ONCOST</title>
+  <meta name="description" content="Return gifts for weddings, birthdays, pooja, baby showers, housewarming and thambulam sets. Brass, German silver and tin pieces guests actually keep. Bulk pricing, custom packaging, pan-India delivery." />
+  <link rel="stylesheet" href="storefront.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-client.js"></script>
+  <script defer src="/seo.js"></script>
+</head>
+<body>
+  <div id="sale-banner" class="sale-banner"></div>
+  <div class="topbar"><span><i class="fas fa-gift"></i> Return Gifts</span><span><i class="fas fa-rupee-sign"></i> Bulk pricing</span><span><i class="fas fa-box-open"></i> Custom packaging</span></div>
+  <header class="site-header">
+    <a class="logo" href="index.html">ONCOST</a>
+    <nav class="desktop-nav">
+      <a href="index.html">Home</a>
+      <a href="products.html">Shop</a>
+      <a href="corporate-gifting.html">Corporate</a>
+      <a href="return-gifts.html" class="active">Return Gifts</a>
+      <a href="about-us.html">About</a>
+      <a href="contact-us.html">Contact</a>
+    </nav>
+    <div class="header-actions">
+      <a class="icon-btn" href="cart.html" data-cart-count><i class="fas fa-cart-shopping"></i></a>
+      <a class="icon-btn" href="account.html" data-account-link><i class="fas fa-user"></i></a>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-hero">
+      <div>
+        <span class="eyebrow">Pieces guests keep</span>
+        <h1>Return gifts for every occasion</h1>
+        <p>Wedding thambulam, birthday return gifts, pooja bagina, baby shower, housewarming — curated brass, German silver, tin and traditional gift sets.</p>
+      </div>
+      <a class="btn secondary" href="products.html"><i class="fas fa-store"></i> Shop Collection</a>
+    </section>
+
+    <section class="section" style="max-width:1080px;margin:0 auto;">
+      <h2 style="font-family:Georgia,serif;color:var(--burgundy);text-align:center;">Shop by occasion</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-top:24px;">
+        <a href="products.html?q=wedding" style="background:var(--cream);padding:24px;border-radius:var(--radius);border:1px solid var(--line);text-decoration:none;color:var(--ink);">
+          <i class="fas fa-ring" style="font-size:24px;color:var(--burgundy);"></i>
+          <h3 style="font-size:18px;margin:10px 0 4px;color:var(--burgundy);">Wedding</h3>
+          <p style="font-size:13px;color:var(--ink-soft);margin:0;">Thambulam sets, brass diyas, German silver gift boxes.</p>
+        </a>
+        <a href="products.html?q=birthday" style="background:var(--cream);padding:24px;border-radius:var(--radius);border:1px solid var(--line);text-decoration:none;color:var(--ink);">
+          <i class="fas fa-cake-candles" style="font-size:24px;color:var(--burgundy);"></i>
+          <h3 style="font-size:18px;margin:10px 0 4px;color:var(--burgundy);">Birthday</h3>
+          <p style="font-size:13px;color:var(--ink-soft);margin:0;">Kid-friendly trinkets and elegant adult return gifts.</p>
+        </a>
+        <a href="products.html?q=pooja" style="background:var(--cream);padding:24px;border-radius:var(--radius);border:1px solid var(--line);text-decoration:none;color:var(--ink);">
+          <i class="fas fa-fire" style="font-size:24px;color:var(--burgundy);"></i>
+          <h3 style="font-size:18px;margin:10px 0 4px;color:var(--burgundy);">Pooja & Festivals</h3>
+          <p style="font-size:13px;color:var(--ink-soft);margin:0;">Diyas, kumkum boxes, bagina sets, festive thalis.</p>
+        </a>
+        <a href="products.html?q=baby" style="background:var(--cream);padding:24px;border-radius:var(--radius);border:1px solid var(--line);text-decoration:none;color:var(--ink);">
+          <i class="fas fa-baby" style="font-size:24px;color:var(--burgundy);"></i>
+          <h3 style="font-size:18px;margin:10px 0 4px;color:var(--burgundy);">Baby Shower</h3>
+          <p style="font-size:13px;color:var(--ink-soft);margin:0;">Seemantham, namakaranam — gentle, gender-neutral picks.</p>
+        </a>
+        <a href="products.html?q=housewarming" style="background:var(--cream);padding:24px;border-radius:var(--radius);border:1px solid var(--line);text-decoration:none;color:var(--ink);">
+          <i class="fas fa-house" style="font-size:24px;color:var(--burgundy);"></i>
+          <h3 style="font-size:18px;margin:10px 0 4px;color:var(--burgundy);">Housewarming</h3>
+          <p style="font-size:13px;color:var(--ink-soft);margin:0;">Griha pravesham gifts — diya stands, brass kalash.</p>
+        </a>
+        <a href="products.html?q=thambulam" style="background:var(--cream);padding:24px;border-radius:var(--radius);border:1px solid var(--line);text-decoration:none;color:var(--ink);">
+          <i class="fas fa-gift" style="font-size:24px;color:var(--burgundy);"></i>
+          <h3 style="font-size:18px;margin:10px 0 4px;color:var(--burgundy);">Thambulam Sets</h3>
+          <p style="font-size:13px;color:var(--ink-soft);margin:0;">Pre-curated traditional thambulam in multiple price bands.</p>
+        </a>
+      </div>
+
+      <h2 style="font-family:Georgia,serif;color:var(--burgundy);margin-top:48px;">Why ONCOST return gifts?</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:18px;">
+        <div style="padding:18px;border-left:3px solid var(--gold);"><strong style="color:var(--burgundy);">Bulk pricing</strong><p style="font-size:13px;color:var(--ink-soft);margin:4px 0 0;">Tiered discounts kick in from 50 pieces.</p></div>
+        <div style="padding:18px;border-left:3px solid var(--gold);"><strong style="color:var(--burgundy);">Custom packaging</strong><p style="font-size:13px;color:var(--ink-soft);margin:4px 0 0;">Personalised tags, monograms, gift wrap.</p></div>
+        <div style="padding:18px;border-left:3px solid var(--gold);"><strong style="color:var(--burgundy);">Authentic craft</strong><p style="font-size:13px;color:var(--ink-soft);margin:4px 0 0;">Sourced directly from Indian artisans and verified suppliers.</p></div>
+        <div style="padding:18px;border-left:3px solid var(--gold);"><strong style="color:var(--burgundy);">Pan-India delivery</strong><p style="font-size:13px;color:var(--ink-soft);margin:4px 0 0;">Delhivery integration with live tracking on every order.</p></div>
+      </div>
+
+      <div style="margin-top:48px;padding:32px;background:var(--burgundy);color:var(--cream);border-radius:var(--radius);text-align:center;">
+        <h2 style="font-family:Georgia,serif;color:var(--gold);margin:0 0 8px;">Planning a function?</h2>
+        <p style="margin:0 0 20px;opacity:.9;">Tell us the event, headcount and budget — we'll send a curated shortlist in 24 hours.</p>
+        <a class="btn secondary" href="bulk.html"><i class="fas fa-paper-plane"></i> Submit Enquiry</a>
+        <a class="btn outline" href="https://wa.me/919059424167?text=Hi%20ONCOST%2C%20I%27m%20looking%20at%20return%20gifts" target="_blank" rel="noopener" style="margin-left:8px;background:transparent;color:var(--gold);border-color:var(--gold);"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div class="footer-col"><div class="brand">ONCOST</div><p>Premium gifting collections for every occasion.</p>
+        <div class="social-row">
+          <a href="https://www.instagram.com/oncost_store/" target="_blank" rel="noopener"><i class="fab fa-instagram"></i></a>
+          <a href="https://www.facebook.com/profile.php?id=61585630141363" target="_blank" rel="noopener"><i class="fab fa-facebook-f"></i></a>
+          <a href="https://wa.me/919059424167" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i></a>
+        </div>
+      </div>
+      <div class="footer-col"><h4>Shop</h4><ul><li><a href="products.html">All Products</a></li><li><a href="corporate-gifting.html">Corporate Gifting</a></li><li><a href="return-gifts.html">Return Gifts</a></li><li><a href="bulk.html">Bulk Orders</a></li></ul></div>
+      <div class="footer-col"><h4>Company</h4><ul><li><a href="about-us.html">About Us</a></li><li><a href="contact-us.html">Contact Us</a></li><li><a href="support.html">Support</a></li></ul></div>
+      <div class="footer-col"><h4>Account</h4><ul><li><a href="login.html">Sign in</a></li><li><a href="signup.html">Sign up</a></li><li><a href="account.html">My Orders</a></li></ul></div>
+    </div>
+    <div class="footer-bottom"><div>© <span id="copy-year"></span> ONCOST · Pragna Enterprise, Hyderabad.</div><div><a class="admin-link" href="admin-dashboard.html"><i class="fas fa-shield-halved"></i> Admin Console</a></div></div>
+  </footer>
+
+  <script>document.getElementById('copy-year').textContent = new Date().getFullYear();</script>
+  <script src="app.js"></script>
+</body>
+</html>
