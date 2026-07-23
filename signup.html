@@ -316,7 +316,10 @@
       const { data, error } = await supabaseClient.auth.signUp({ email, password });
       if (error) { err.textContent = error.message; err.style.display = 'block'; btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus"></i> Create Account'; return; }
       if (data.user) {
-        try { await supabaseClient.from('profiles').upsert({ id: data.user.id, name, phone }); } catch {}
+        try {
+          const { error: pe } = await supabaseClient.from('profiles').upsert({ id: data.user.id, name, phone: phone ? '+91' + phone : null, email });
+          if (pe && pe.message?.includes('email')) await supabaseClient.from('profiles').upsert({ id: data.user.id, name, phone: phone ? '+91' + phone : null });
+        } catch {}
       }
       ok.textContent = 'Account created! Check your email for confirmation, then sign in.';
       ok.style.display = 'block';
