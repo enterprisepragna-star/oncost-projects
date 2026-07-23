@@ -378,7 +378,7 @@
       }
       if (state.profile) {
         if (!document.getElementById('ck-name').value && state.profile.name)  document.getElementById('ck-name').value  = state.profile.name;
-        if (!document.getElementById('ck-phone').value && state.profile.phone) document.getElementById('ck-phone').value = state.profile.phone;
+        if (!document.getElementById('ck-phone').value && state.profile.phone) document.getElementById('ck-phone').value = String(state.profile.phone).replace(/\D/g, '').slice(-10);
         if (!document.getElementById('ck-address').value && state.profile.address) document.getElementById('ck-address').value = state.profile.address;
         if (!document.getElementById('ck-city').value && state.profile.city) document.getElementById('ck-city').value = state.profile.city;
         if (!document.getElementById('ck-state').value && state.profile.state) document.getElementById('ck-state').value = state.profile.state;
