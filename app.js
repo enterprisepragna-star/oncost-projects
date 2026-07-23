@@ -1013,6 +1013,7 @@ function maybeShowCompleteProfile() {
         }
       });
     }
+    if (!p.welcome_coupon_sent_at) claimWelcomeOffer();
     return;
   }
 
