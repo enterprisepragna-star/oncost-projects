@@ -71,8 +71,8 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    if (cartSubtotal && data.min_order_value && Number(cartSubtotal) < Number(data.min_order_value)) {
-      res.status(400).json({ valid: false, error: `Minimum order of ₹${data.min_order_value} required` });
+    if (cartSubtotal && data.min_order_amount && Number(cartSubtotal) < Number(data.min_order_amount)) {
+      res.status(400).json({ valid: false, error: `Minimum order of ₹${data.min_order_amount} required` });
       return;
     }
 
@@ -81,8 +81,9 @@ module.exports = async function handler(req, res) {
       coupon: {
         id: data.id,
         code: data.code,
-        discount_amount: data.discount_amount,
-        min_order_value: data.min_order_value
+        discount_type: data.discount_type,
+        discount_value: data.discount_value,
+        min_order_amount: data.min_order_amount
       }
     });
 

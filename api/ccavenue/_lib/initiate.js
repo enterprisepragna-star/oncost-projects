@@ -63,10 +63,16 @@ module.exports = async function handler(req, res) {
       if (coup) {
         if (coup.expires_at && new Date(coup.expires_at) < new Date()) throw new Error('Expired coupon');
         if (coup.usage_limit && coup.used_count >= coup.usage_limit) throw new Error('Coupon usage limit reached');
-        if (coup.min_order_value && subtotal < coup.min_order_value) throw new Error('Minimum order not met for coupon');
+        if (coup.min_order_amount && subtotal < coup.min_order_amount) throw new Error('Minimum order not met for coupon');
         
-        // Use verified discount amount from DB
-        discountAmt = Number(coup.discount_amount);
+        // Calculate verified discount amount from DB
+        let calculatedDiscount = 0;
+        if (coup.discount_type === 'percent') {
+          calculatedDiscount = (subtotal * Number(coup.discount_value)) / 100;
+        } else {
+          calculatedDiscount = Number(coup.discount_value);
+        }
+        discountAmt = Math.min(calculatedDiscount, subtotal);
       } else {
         throw new Error('Invalid coupon');
       }
@@ -109,13 +115,15 @@ module.exports = async function handler(req, res) {
     if (!insertRes.ok) {
       const errTxt = await insertRes.text();
       console.error('[ccavenue/initiate] Supabase insert failed:', insertRes.status, errTxt);
-      // Do NOT block payment — webhook will UPSERT later. But log it loudly.
+      res.status(500).send(`<!DOCTYPE html><html><body><h2>Checkout Error</h2><p>Failed to create order in our database. Please try again.</p><p><a href="/cart.html">Return to Cart</a></p></body></html>`);
+      return;
     } else {
       console.log('[ccavenue/initiate] Supabase order created:', orderId);
     }
   } catch (e) {
     console.error('[ccavenue/initiate] Supabase insert exception:', e.message);
-    // continue anyway — webhook will upsert
+    res.status(500).send(`<!DOCTYPE html><html><body><h2>Checkout Error</h2><p>Failed to connect to our database. Please try again.</p><p><a href="/cart.html">Return to Cart</a></p></body></html>`);
+    return;
   }
 
   // Sanitize inputs to prevent CCAvenue WAF from blocking the transaction

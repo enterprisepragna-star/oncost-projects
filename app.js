@@ -18,7 +18,7 @@ const state = {
   saleEvents: [],
   cart: [],            // [{ id, product_id, qty, product }]
   wishlist: [],        // [{ id, product_id }]
-  appliedCoupon: null,
+  appliedCoupon: (() => { try { return JSON.parse(sessionStorage.getItem('appliedCoupon')) } catch { return null } })(),
   isAdmin: false,
 };
 
@@ -689,6 +689,7 @@ function renderCart() {
 window.applyCoupon = async function() {
   if (state.appliedCoupon) {
     state.appliedCoupon = null;
+    sessionStorage.removeItem('appliedCoupon');
     renderCart();
     return;
   }
@@ -709,6 +710,7 @@ window.applyCoupon = async function() {
       return;
     }
     state.appliedCoupon = res.coupon;
+    sessionStorage.setItem('appliedCoupon', JSON.stringify(res.coupon));
     renderCart();
     toast(`Coupon ${res.coupon.code} applied`, 'ok');
   } catch (e) {

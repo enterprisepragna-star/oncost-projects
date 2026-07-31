@@ -136,8 +136,8 @@ module.exports = async function handler(req, res) {
   // ============= AUTO-INCREMENT LOYALTY POINTS =============
   if (dbStatus === 'Paid' && orderRow && orderRow.user_id) {
     try {
-      // Points = 1 per Rs. 100 spent
-      const earnedPoints = Math.floor(Number(orderRow.total_amount || 0) / 100);
+      // Points = 1 per Rs. 100 spent (rounded up so small transactions get at least 1)
+      const earnedPoints = Math.ceil(Number(orderRow.total_amount || 0) / 100);
       if (earnedPoints > 0) {
         const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${orderRow.user_id}&select=loyalty_points`, {
           headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` }
@@ -185,54 +185,33 @@ module.exports = async function handler(req, res) {
     }).catch(err => console.error('[ccavenue/response] AWB auto-create failed:', err.message));
   }
 
-  // ============= FIRE-AND-FORGET ORDER INVOICE EMAIL (Resend + PDF) =============
-  if (dbStatus === 'Paid' && orderRow && process.env.RESEND_API_KEY) {
-    const email = orderRow.guest_email || (orderRow.shipping_address && orderRow.shipping_address.email);
-    const name  = (orderRow.shipping_address && orderRow.shipping_address.name) || 'Customer';
-    if (email) {
-      fetch(`${SITE_URL}/api/email/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
-        body: JSON.stringify({
-          type: 'order_invoice',
-          to: email,
-          order_id: orderRow.id,
-          data: {
-            name,
-            order_id: orderId,
-            amount: String(amount || orderRow.total_amount || ''),
-            invoice_url: `${SITE_URL}/thank-you.html?status=success&order_id=${encodeURIComponent(orderId)}&tracking_id=${encodeURIComponent(trackingId||'')}&amount=${encodeURIComponent(amount||'')}`,
-          },
-        }),
-      }).catch(err => console.error('[ccavenue/response] order_invoice email failed:', err.message));
-    }
-  }
-
-  // ============= FIRE-AND-FORGET WHATSAPP CONFIRM =============
+  // ============= SEND NOTIFICATIONS =============
   if (dbStatus === 'Paid' && orderRow) {
-    const INTERNAL_KEY = process.env.INTERNAL_API_KEY;
     const phone = orderRow.guest_phone || (orderRow.shipping_address && orderRow.shipping_address.phone);
     const name  = (orderRow.shipping_address && orderRow.shipping_address.name) || 'Customer';
     
-    // 1. Send WhatsApp confirmation
-    if (phone) {
-      fetch(`${SITE_URL}/api/whatsapp?action=send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(INTERNAL_KEY ? { 'x-internal-key': INTERNAL_KEY } : {}) },
-        body: JSON.stringify({
-          type: 'order_confirm',
-          to: phone,
-          params: {
-            customer_name: name,
-            order_id: orderId,
-            amount: String(amount || orderRow.total_amount || ''),
-            tracking_url: `${SITE_URL}/account.html?tab=orders`,
-          },
-        }),
-      }).catch(err => console.error('[ccavenue/response] WhatsApp confirm failed:', err.message));
+    // 1. Send WhatsApp confirmation directly via AiSensy
+    const AISENSY_API_KEY = process.env.AISENSY_API_KEY;
+    if (AISENSY_API_KEY && phone) {
+      const e164 = String(phone).replace(/[^0-9]/g, '').replace(/^0+/, '');
+      const finalPhone = e164.startsWith('91') ? e164 : `91${e164}`;
+      if (finalPhone.length === 12) {
+        fetch('https://backend.aisensy.com/campaign/t1/api/v2', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey: AISENSY_API_KEY,
+            campaignName: 'oncost_order_confirm',
+            destination: finalPhone,
+            userName: name,
+            templateParams: [name, orderId, String(amount || orderRow.total_amount || ''), `${SITE_URL}/account.html?tab=orders`],
+            source: 'oncost-storefront'
+          })
+        }).catch(err => console.error('[ccavenue/response] Direct WhatsApp failed:', err.message));
+      }
     }
 
-    // 2. Send Custom HTML Invoice Email
+    // 2. Send Custom HTML Invoice Email (includes PDF)
     sendOrderConfirmation(orderRow).catch(err => console.error('[ccavenue/response] Email confirm failed:', err.message));
   }
 

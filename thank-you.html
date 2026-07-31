@@ -292,6 +292,7 @@
       // Clear cart on success
       try {
         localStorage.removeItem('oncost_cart');
+        sessionStorage.removeItem('appliedCoupon');
         supabaseClient.auth.getSession().then(({ data: { session } }) => {
           if (session) supabaseClient.from('cart_items').delete().eq('user_id', session.user.id);
         });
