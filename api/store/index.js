@@ -8,8 +8,14 @@
 const { generateInvoicePDF } = require('../email/_lib/invoice-pdf');
 
 function env() {
+  let SUPABASE_URL = (process.env.SUPABASE_URL || '').trim();
+  if (!SUPABASE_URL.startsWith('http') || SUPABASE_URL.startsWith('sb_')) {
+    SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jyvmmypalshebqmnrdma.supabase.co';
+  }
+  SUPABASE_URL = SUPABASE_URL.replace(/\/$/, '');
+
   return {
-    SUPABASE_URL: (process.env.SUPABASE_URL || '').trim(),
+    SUPABASE_URL,
     SERVICE_KEY: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(),
     SITE_URL: (process.env.SITE_URL || 'https://www.oncost.shop').trim(),
   };

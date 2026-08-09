@@ -164,6 +164,48 @@ module.exports = async function handler(req, res) {
       </div>`;
       break;
 
+    case 'order_packed':
+      subject = `Your order is packed and ready! · ${data.order_id || ''}`;
+      html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
+        <div style="background:#7a1f35;color:#f2dd92;padding:24px;border-radius:8px 8px 0 0;text-align:center;">
+          <h2 style="margin:0;font-family:Georgia,serif;">Order Packed</h2>
+        </div>
+        <div style="background:#fff;padding:24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
+          <p>Hi ${(data.name || 'Customer')},</p>
+          <p>Great news! Your order <strong>${(data.order_id || '')}</strong> has been packed and is awaiting pickup from our delivery partner.</p>
+          <p>We'll send you another email with tracking details as soon as it ships.</p>
+        </div>
+      </div>`;
+      break;
+
+    case 'order_delivered':
+      subject = `Your order has been delivered! · ${data.order_id || ''}`;
+      html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
+        <div style="background:#7a1f35;color:#f2dd92;padding:24px;border-radius:8px 8px 0 0;text-align:center;">
+          <h2 style="margin:0;font-family:Georgia,serif;">Order Delivered</h2>
+        </div>
+        <div style="background:#fff;padding:24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
+          <p>Hi ${(data.name || 'Customer')},</p>
+          <p>Your order <strong>${(data.order_id || '')}</strong> has been successfully delivered.</p>
+          <p>We hope you enjoy your purchase! If you have any issues or questions, please don't hesitate to reach out to our support team.</p>
+        </div>
+      </div>`;
+      break;
+
+    case 'order_cancelled':
+      subject = `Order Cancelled · ${data.order_id || ''}`;
+      html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
+        <div style="background:#8b2424;color:#f2dd92;padding:24px;border-radius:8px 8px 0 0;text-align:center;">
+          <h2 style="margin:0;font-family:Georgia,serif;">Order Cancelled</h2>
+        </div>
+        <div style="background:#fff;padding:24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
+          <p>Hi ${(data.name || 'Customer')},</p>
+          <p>This email is to confirm that your order <strong>${(data.order_id || '')}</strong> has been cancelled.</p>
+          <p>If you have already paid for this order, your refund will be processed according to our refund policy. Please contact support if you have any questions.</p>
+        </div>
+      </div>`;
+      break;
+
     case 'testimonial_request':
       subject = `How was your ONCOST order?`;
       html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
