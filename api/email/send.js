@@ -20,7 +20,6 @@ module.exports = async function handler(req, res) {
     SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://jyvmmypalshebqmnrdma.supabase.co';
   }
   const SERVICE_KEY     = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-  if (!RESEND_API_KEY) return res.status(500).json({ error: 'RESEND_API_KEY missing in Vercel env' });
 
   // Allow internal calls (no key check) OR admin key
   const isAdmin = req.headers['x-admin-key'] === ADMIN_KEY;
@@ -148,6 +147,20 @@ module.exports = async function handler(req, res) {
       break;
     }
 
+    case 'order_processing':
+      subject = `Order is being processed · ${data.order_id || ''}`;
+      html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
+        <div style="background:#7a1f35;color:#f2dd92;padding:24px;border-radius:8px 8px 0 0;text-align:center;">
+          <h2 style="margin:0;font-family:Georgia,serif;">Order Processing</h2>
+        </div>
+        <div style="background:#fff;padding:24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
+          <p>Hi ${(data.name || 'Customer')},</p>
+          <p>We've received your order <strong>${(data.order_id || '')}</strong> and we are now processing it.</p>
+          <p>We'll notify you once it's packed and ready to ship.</p>
+        </div>
+      </div>`;
+      break;
+
     case 'order_shipped':
       subject = `📦 Your order is on the way · ${data.order_id || ''}`;
       html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
@@ -178,6 +191,20 @@ module.exports = async function handler(req, res) {
       </div>`;
       break;
 
+    case 'out_for_delivery':
+      subject = `Your order is Out for Delivery! · ${data.order_id || ''}`;
+      html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
+        <div style="background:#7a1f35;color:#f2dd92;padding:24px;border-radius:8px 8px 0 0;text-align:center;">
+          <h2 style="margin:0;font-family:Georgia,serif;">Out for Delivery</h2>
+        </div>
+        <div style="background:#fff;padding:24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
+          <p>Hi ${(data.name || 'Customer')},</p>
+          <p>Great news! Your order <strong>${(data.order_id || '')}</strong> is out for delivery and will arrive today.</p>
+          <p>Please make sure someone is available to receive the package.</p>
+        </div>
+      </div>`;
+      break;
+
     case 'order_delivered':
       subject = `Your order has been delivered! · ${data.order_id || ''}`;
       html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
@@ -187,7 +214,11 @@ module.exports = async function handler(req, res) {
         <div style="background:#fff;padding:24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
           <p>Hi ${(data.name || 'Customer')},</p>
           <p>Your order <strong>${(data.order_id || '')}</strong> has been successfully delivered.</p>
-          <p>We hope you enjoy your purchase! If you have any issues or questions, please don't hesitate to reach out to our support team.</p>
+          <p>We hope you enjoy your purchase! We would love to hear your feedback.</p>
+          <p style="text-align:center;margin:24px 0;">
+            <a href="https://www.oncost.shop/account.html#orders" style="background:#7a1f35;color:#f2dd92;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">Leave a Review ★★★★★</a>
+          </p>
+          <p>If you have any issues or questions, please don't hesitate to reach out to our support team.</p>
         </div>
       </div>`;
       break;
@@ -294,6 +325,14 @@ module.exports = async function handler(req, res) {
 
   if (!recipient) return res.status(400).json({ error: 'No recipient address' });
 
+  if (!RESEND_API_KEY) {
+    console.error('[email/send] RESEND_API_KEY missing, skipping email send.');
+    if (type === 'enquiry_admin_notify') {
+      return res.status(200).json({ ok: true, warning: 'Email notification skipped (no API key), but lead saved' });
+    }
+    return res.status(500).json({ error: 'RESEND_API_KEY missing in Vercel env' });
+  }
+
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -313,12 +352,18 @@ module.exports = async function handler(req, res) {
     const j = await r.json();
     if (!r.ok) {
       console.error('[email/send] Resend error:', j);
+      if (type === 'enquiry_admin_notify') {
+        return res.status(200).json({ ok: true, warning: 'Email notification failed, but lead saved', detail: j });
+      }
       return res.status(500).json({ error: j.message || 'Resend send failed', detail: j });
     }
     console.log(`[email/send] type=${type} to=${recipient} id=${j.id}`);
     res.status(200).json({ ok: true, id: j.id });
   } catch (e) {
     console.error('[email/send] exception:', e.message);
+    if (type === 'enquiry_admin_notify') {
+      return res.status(200).json({ ok: true, warning: 'Email notification exception, but lead saved', error: e.message });
+    }
     res.status(500).json({ error: e.message });
   }
 };

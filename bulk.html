@@ -325,14 +325,6 @@
 
   <script>
     document.getElementById('copy-year').textContent = new Date().getFullYear();
-    // Mirror fab whatsapp link to inline button
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(() => {
-        const fab = document.getElementById('fab-whatsapp');
-        const btn = document.getElementById('bulk-whatsapp');
-        if (fab && btn && fab.href) btn.href = fab.href;
-      }, 1500);
-    });
   </script>
   <script src="app.js"></script>
 </body>

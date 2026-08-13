@@ -38,7 +38,7 @@ module.exports = async function handler(req, res) {
     let emailType = '';
     switch (newOrder.status) {
       case 'Confirmed':
-        emailType = 'order_confirm';
+        emailType = 'order_processing';
         break;
       case 'Packed':
         emailType = 'order_packed';

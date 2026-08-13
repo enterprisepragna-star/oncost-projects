@@ -1,0 +1,142 @@
+/* Dynamic Festival Themes */
+
+/* Diwali Theme (Gold & Deep Orange) */
+.theme-diwali {
+  --burgundy:       #d35400;
+  --burgundy-dark:  #a04000;
+  --burgundy-soft:  #e59866;
+  --gold:           #f1c40f;
+  --gold-light:     #f7dc6f;
+  --gold-soft:      #fcf3cf;
+  --cream:          #fdf2e9;
+  --paper:          #fdfefe;
+}
+
+/* Christmas Theme (Red & Pine Green) */
+.theme-christmas {
+  --burgundy:       #c0392b;
+  --burgundy-dark:  #922b21;
+  --burgundy-soft:  #d98880;
+  --gold:           #27ae60;
+  --gold-light:     #2ecc71;
+  --gold-soft:      #e9f7ef;
+  --cream:          #f9ebea;
+  --paper:          #fdfefe;
+}
+
+/* Independence Day Theme (Ashoka Navy, White, Accents) */
+.theme-independence {
+  --burgundy:       #000088;
+  --burgundy-dark:  #000055;
+  --burgundy-soft:  #3333aa;
+  --gold:           #ff9933;
+  --gold-light:     #ffb366;
+  --gold-soft:      #fff5eb;
+  --cream:          #f4f6f9;
+  --paper:          #fdfefe;
+}
+
+
+/* =========================================
+   Swiggy/Zepto Style Animations & Decorations
+   ========================================= */
+
+/* Falling Particles Container */
+.particle-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none; /* so they don't block clicks */
+  z-index: 9999;
+  overflow: hidden;
+}
+
+.particle {
+  position: absolute;
+  top: -50px;
+  animation: fall linear forwards;
+  font-size: 24px;
+  opacity: 0.9;
+  user-select: none;
+}
+
+@keyframes fall {
+  0% { transform: translateY(-50px) rotate(0deg); opacity: 1; }
+  80% { opacity: 0.8; }
+  100% { transform: translateY(110vh) rotate(360deg); opacity: 0; }
+}
+
+/* Pulsing Sale Banner */
+.theme-diwali .sale-banner,
+.theme-christmas .sale-banner,
+.theme-independence .sale-banner {
+  background: linear-gradient(270deg, var(--burgundy), var(--burgundy-dark), var(--burgundy-soft));
+  background-size: 200% 200%;
+  animation: bgPulse 3s ease infinite;
+  display: block; /* Force show for testing */
+}
+
+@keyframes bgPulse {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Header Decor (Toran / Frost) */
+.site-header::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 0;
+  width: 100%;
+  height: 10px;
+  pointer-events: none;
+  z-index: 24;
+  background-repeat: repeat-x;
+  background-size: contain;
+}
+
+/* Diwali - Toran effect (dots/scallops) */
+.theme-diwali .site-header::after {
+  background-image: radial-gradient(circle at 10px 0, transparent 10px, var(--gold) 11px);
+  background-size: 20px 10px;
+  height: 10px;
+}
+.theme-diwali .site-header .logo {
+  text-shadow: 0 0 12px rgba(241, 196, 15, 0.6);
+}
+.theme-diwali .site-header .logo::after {
+  content: ' 🪔';
+  font-size: 0.8em;
+}
+
+/* Christmas - Frost/Snow effect */
+.theme-christmas .site-header::after {
+  background-image: radial-gradient(circle at 10px 10px, #fff 10px, transparent 11px);
+  background-size: 20px 20px;
+  height: 20px;
+  bottom: -20px;
+}
+.theme-christmas .site-header .logo {
+  text-shadow: 0 0 12px rgba(46, 204, 113, 0.6);
+}
+.theme-christmas .site-header .logo::after {
+  content: ' 🎄';
+  font-size: 0.8em;
+}
+
+/* Independence - Saffron/Green line */
+.theme-independence .site-header::after {
+  background: linear-gradient(to right, #ff9933 33.3%, #ffffff 33.3%, #ffffff 66.6%, #138808 66.6%);
+  height: 4px;
+  bottom: -4px;
+}
+.theme-independence .site-header .logo {
+  text-shadow: 0 0 12px rgba(255, 153, 51, 0.6);
+}
+.theme-independence .site-header .logo::after {
+  content: ' 🇮🇳';
+  font-size: 0.8em;
+}

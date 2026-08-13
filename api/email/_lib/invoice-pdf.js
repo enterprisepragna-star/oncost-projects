@@ -9,7 +9,6 @@
 // products: optional map { [product_id]: { hsn_code, gst_percent, name } } - enriches items
 // seller: { name, address, gstin, state, email, phone, logo? }  (sensible defaults applied)
 
-const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 
 const DEFAULT_SELLER = {
   name: 'ONCOST',
@@ -30,6 +29,7 @@ function inr(n) {
 function safe(s) { return String(s == null ? '' : s); }
 
 async function generateInvoicePDF({ order, products = {}, seller = {} }) {
+  const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
   const S = { ...DEFAULT_SELLER, ...seller };
   const doc = await PDFDocument.create();
   const page = doc.addPage([595.28, 841.89]); // A4 portrait

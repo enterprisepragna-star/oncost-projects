@@ -1581,6 +1581,22 @@ function setupEnquiryForm() {
       if (p) productSlot.textContent = `Enquiry for: ${p.name}`;
     }
   }
+  const waBtn = document.getElementById('bulk-whatsapp');
+  if (waBtn) {
+    waBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      const fd = new FormData(form);
+      const msg = `Bulk Enquiry:\nName: ${fd.get('name')}\nEmail: ${fd.get('email')}\nPhone: ${fd.get('phone')}\nGSTIN: ${fd.get('gstin') || '-'}\nEvent: ${fd.get('eventType')}\nQuantity: ${fd.get('quantity')}\nDate: ${fd.get('eventDate') || '-'}\nBudget: ${fd.get('budget') || '-'}\nMessage: ${fd.get('message') || '-'}`;
+      const num = (state.settings?.whatsapp_number || '').replace(/[^0-9]/g, '');
+      if (!num) return toast('WhatsApp number not configured', 'err');
+      window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank');
+    });
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(form);

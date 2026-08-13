@@ -59,6 +59,12 @@ module.exports = async function handler(req, res) {
     if (statusText.toLowerCase() === 'delivered') mappedStatus = 'Delivered';
     if (statusText.toLowerCase() === 'rto') mappedStatus = 'Returned';
 
+    const updateData = { shipping_status: mappedStatus };
+    if (mappedStatus === 'Delivered') {
+      updateData.status = 'Delivered';
+      updateData.delivered_at = new Date().toISOString();
+    }
+
     // Update the database
     await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${orderRow.id}`, {
       method: 'PATCH',
@@ -67,13 +73,35 @@ module.exports = async function handler(req, res) {
         Authorization: `Bearer ${SERVICE_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        shipping_status: mappedStatus
-      })
+      body: JSON.stringify(updateData)
     });
 
-    // Send the custom email notification to the customer
-    await sendTrackingUpdate(orderRow, statusText, location);
+    const isOutForDelivery = statusText.toLowerCase() === 'out for delivery';
+
+    if (isOutForDelivery) {
+      // Send the specialized templates via our unified email dispatcher
+      const emailType = 'out_for_delivery';
+      
+      const host = req.headers.host || 'www.oncost.shop';
+      const protocol = host.includes('localhost') ? 'http' : 'https';
+      
+      fetch(`${protocol}://${host}/api/email/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
+        body: JSON.stringify({
+          type: emailType,
+          to: orderRow.user_email || orderRow.guest_email || (orderRow.shipping_address && orderRow.shipping_address.email),
+          order_id: orderRow.id,
+          data: {
+            name: (orderRow.shipping_address && orderRow.shipping_address.name) || 'Customer',
+            order_id: orderRow.id.substring(0, 8).toUpperCase()
+          }
+        })
+      }).catch(e => console.error('[webhook/delhivery] Special email trigger failed:', e));
+    } else if (mappedStatus !== 'Delivered') {
+      // Send the generic custom email notification to the customer for intermediate steps
+      await sendTrackingUpdate(orderRow, statusText, location);
+    }
 
     // Send WhatsApp tracking update if internal API is configured
     const INTERNAL_KEY = process.env.INTERNAL_API_KEY;
