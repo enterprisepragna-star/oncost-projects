@@ -1978,3 +1978,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if(window.updateCountryRules) window.updateCountryRules(sel);
   });
 });
+
+// Independence Day Theme (Active only on Aug 15)
+(function() {
+  const today = new Date();
+  if (today.getMonth() === 7 && today.getDate() === 15) {
+    document.addEventListener('DOMContentLoaded', () => {
+      const topbar = document.querySelector('.topbar');
+      if (topbar) {
+        topbar.style.background = 'linear-gradient(90deg, #FF9933 0%, #FFFFFF 50%, #138808 100%)';
+        topbar.style.color = '#000080';
+        const spans = topbar.querySelectorAll('span');
+        spans.forEach(span => span.style.color = '#000080');
+        topbar.insertAdjacentHTML('afterbegin', '<span style="font-weight:bold;font-size:1.1em;text-transform:uppercase;"><i class="fas fa-flag"></i> Happy Independence Day!</span>');
+      }
+      const style = document.createElement('style');
+      style.textContent = `
+        .btn.primary { background-color: #FF9933 !important; border-color: #FF9933 !important; color: white !important; }
+        .btn.primary:hover { filter: brightness(0.9); }
+        .eyebrow { color: #138808 !important; border-color: rgba(19, 136, 8, 0.2) !important; background: rgba(19, 136, 8, 0.05) !important; }
+        .site-header { border-bottom: 3px solid #FF9933; }
+      `;
+      document.head.appendChild(style);
+    });
+  }
+})();

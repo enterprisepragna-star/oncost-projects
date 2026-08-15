@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Independence Day Theme</title>
+    <style>
+        :root {
+            --saffron: #FF9933;
+            --white: #FFFFFF;
+            --green: #138808;
+            --navy-blue: #000080;
+            --dark-gray: #333333;
+            --light-bg: #f8f9fa;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--light-bg);
+            color: var(--dark-gray);
+            line-height: 1.6;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, var(--saffron) 0%, var(--white) 50%, var(--green) 100%);
+            min-height: 60vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chakra {
+            width: 150px;
+            height: 150px;
+            border: 4px solid var(--navy-blue);
+            border-radius: 50%;
+            position: absolute;
+            opacity: 0.1;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: spin 20s linear infinite;
+        }
+
+        @keyframes spin {
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            font-weight: 800;
+            color: var(--navy-blue);
+            margin-bottom: 1rem;
+            z-index: 1;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.5);
+        }
+
+        .hero p {
+            font-size: 1.5rem;
+            color: var(--dark-gray);
+            max-width: 600px;
+            z-index: 1;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+
+        .theme-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: -3rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .card {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border-top: 6px solid;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.12);
+        }
+
+        .card.saffron { border-color: var(--saffron); }
+        .card.white { border-color: #e0e0e0; }
+        .card.green { border-color: var(--green); }
+
+        .card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--navy-blue);
+        }
+
+        .color-palette {
+            display: flex;
+            gap: 1rem;
+            margin-top: 3rem;
+            justify-content: center;
+        }
+
+        .color-swatch {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: var(--dark-gray);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .swatch-saffron { background: var(--saffron); color: white; }
+        .swatch-white { background: var(--white); border: 1px solid #eee; }
+        .swatch-green { background: var(--green); color: white; }
+        .swatch-navy { background: var(--navy-blue); color: white; }
+
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.5rem; }
+            .hero p { font-size: 1.2rem; }
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <header class="hero">
+        <div class="chakra"></div>
+        <h1>Happy Independence Day</h1>
+        <p>A beautiful theme inspired by the tricolor to celebrate freedom and unity.</p>
+    </header>
+
+    <main class="container">
+        <div class="theme-cards">
+            <div class="card saffron">
+                <h3>Courage & Sacrifice</h3>
+                <p>The saffron color indicates the strength and courage of the country. Incorporate this color for primary actions, buttons, and energetic highlights.</p>
+            </div>
+            <div class="card white">
+                <h3>Peace & Truth</h3>
+                <p>The white middle band indicates peace and truth with Dharma Chakra. Use generous whitespace to create a clean, harmonious layout.</p>
+            </div>
+            <div class="card green">
+                <h3>Faith & Chivalry</h3>
+                <p>The green shows the fertility, growth and auspiciousness of the land. Excellent for success states, confirmations, and organic design elements.</p>
+            </div>
+        </div>
+
+        <div class="color-palette">
+            <div class="color-swatch swatch-saffron">#FF9933</div>
+            <div class="color-swatch swatch-white">#FFFFFF</div>
+            <div class="color-swatch swatch-green">#138808</div>
+            <div class="color-swatch swatch-navy">#000080</div>
+        </div>
+    </main>
+
+</body>
+</html>
