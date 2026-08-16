@@ -317,7 +317,7 @@ window.saveBusinessProfile = saveBusinessProfile;
 // Fallback: imgbb if a key is set (for users who prefer it).
 async function uploadProductImage(file) {
   if (!file) throw new Error('No file selected.');
-  if (file.size > 5 * 1024 * 1024) throw new Error('Image too large. Max 5 MB.');
+  if (file.size > 10 * 1024 * 1024) throw new Error('Image too large. Max 10 MB.');
   if (!/^image\//.test(file.type)) throw new Error('Only image files (JPG, PNG, WEBP, GIF) supported.');
 
   // 1️⃣ Try Supabase Storage (preferred)
@@ -886,7 +886,7 @@ function openProductForm(id) {
         <div class="dropzone" id="${formId}-drop" data-testid="pf-drop">
           <div class="big-icon"><i class="fas fa-image"></i></div>
           <div style="font-weight:600;margin-bottom:4px">Drop a JPG/PNG to upload</div>
-          <div style="font-size:12px;color:var(--admin-text-mute)" id="${formId}-drop-sub">Stored in your Supabase project · JPG/PNG/WEBP/GIF · max 5 MB</div>
+          <div style="font-size:12px;color:var(--admin-text-mute)" id="${formId}-drop-sub">Stored in your Supabase project · JPG/PNG/WEBP · max 10 MB</div>
           <input type="file" id="${formId}-file" accept="image/jpeg,image/png,image/webp" hidden />
         </div>
         <div style="margin:14px 0 6px;font-size:12px;color:var(--admin-text-mute);text-align:center;">— or —</div>
@@ -909,7 +909,7 @@ function openProductForm(id) {
             <button type="button" class="btn btn-secondary btn-sm" id="${formId}-gallery_upload_btn"><i class="fas fa-upload"></i> Upload file(s)</button>
             <input type="file" id="${formId}-gallery_file" accept="image/jpeg,image/png,image/webp" hidden multiple />
           </div>
-          <div class="hint" style="margin-top:6px;">JPG / PNG / WEBP · max 5 MB each · max 5 images total.</div>
+          <div class="hint" style="margin-top:6px;">JPG / PNG / WEBP · max 10 MB each · max 10 images total.</div>
         </div>
       </div>
 
@@ -974,6 +974,33 @@ function openProductForm(id) {
       <div class="tab-pane" data-pane="inventory">
         <div class="grid-2">
           <div class="field"><label>Stock On Hand</label><input class="input" id="${formId}-stock" type="number" min="0" data-testid="pf-stock" value="${p?.stock ?? 0}" /></div>
+          <div class="field"><label>Minimum Order Quantity (MOQ)</label>
+            <input class="input" id="${formId}-moq" type="number" min="1" data-testid="pf-moq" value="${p?.moq ?? 1}" placeholder="e.g. 50" />
+            <div class="hint">Customers must order at least this many units. Shown on product page.</div>
+          </div>
+        </div>
+        <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--admin-border);">
+          <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-bottom:10px;">
+            <input type="checkbox" id="${formId}-is_combo" data-testid="pf-is-combo" ${p?.is_combo ? 'checked' : ''} />
+            <span><b>This is a Combo / Bundle product</b></span>
+          </label>
+          <div id="${formId}-combo-block" style="display:${p?.is_combo ? 'block' : 'none'};">
+            <div style="background:#FFF8E7;border:1px solid #E8C36E;border-radius:6px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:#7A4310;">
+              <i class="fas fa-box"></i> <strong>Combo MOQ</strong> — set the mandatory minimum quantity customers must buy as a set. E.g. a "Diwali Kit" combo must be ordered in multiples of 10 sets.
+            </div>
+            <div class="grid-2">
+              <div class="field">
+                <label>Combo MOQ (mandatory set size) *</label>
+                <input class="input" id="${formId}-combo_moq" type="number" min="1" data-testid="pf-combo-moq" value="${p?.combo_moq ?? ''}" placeholder="e.g. 10" />
+                <div class="hint">Customers must buy in multiples of this number. E.g. 10 = must buy 10, 20, 30…</div>
+              </div>
+              <div class="field">
+                <label>Combo set label <span style="font-weight:400;color:var(--admin-text-mute);font-size:11px;">(shown to customer)</span></label>
+                <input class="input" id="${formId}-combo_label" data-testid="pf-combo-label" value="${escapeHTML(p?.combo_label || '')}" placeholder="e.g. Set of 10, Kit of 5" />
+                <div class="hint">E.g. "Set of 10" shown on product card and detail page.</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1087,6 +1114,11 @@ function openProductForm(id) {
     $(`${formId}-variants-block`).style.display = e.target.checked ? 'block' : 'none';
     if (e.target.checked && !variants.length) loadExistingVariants();
   });
+
+  // Combo toggle
+  $(`${formId}-is_combo`).addEventListener('change', e => {
+    $(`${formId}-combo-block`).style.display = e.target.checked ? 'block' : 'none';
+  });
   $(`${formId}-add-variant`).addEventListener('click', () => {
     const type = $(`${formId}-variant-type`).value;
     const basePrice = Number($(`${formId}-price`).value) || 0;
@@ -1137,7 +1169,7 @@ function openProductForm(id) {
       showToast('Image uploaded.');
     } catch (e) {
       showToast(e.message, 'error');
-      $(`${formId}-drop-sub`).textContent = 'Stored in your Supabase project · JPG/PNG/WEBP/GIF · max 5 MB';
+      $(`${formId}-drop-sub`).textContent = 'Stored in your Supabase project · JPG/PNG/WEBP · max 10 MB';
     }
   }
 
@@ -1149,7 +1181,7 @@ function openProductForm(id) {
   let gallery = Array.isArray(p?.image_urls) ? [...p.image_urls] : [];
   if (p?.image_url && !gallery.includes(p.image_url)) gallery.unshift(p.image_url);
 
-  const MAX_IMAGES = 5;
+  const MAX_IMAGES = 10;
 
   function renderGallery() {
     const slot = $(`${formId}-gallery`);
@@ -1314,6 +1346,7 @@ function openProductForm(id) {
       const clean = (url || '').trim();
       if (clean && !finalImages.includes(clean) && finalImages.length < MAX_IMAGES) finalImages.push(clean);
     });
+    const isCombo = $(`${formId}-is_combo`)?.checked || false;
     const payload = {
       id: newId, name,
       sku: $(`${formId}-sku`).value.trim() || null,
@@ -1334,9 +1367,17 @@ function openProductForm(id) {
       image_url: finalImages[0] || null,
       image_urls: finalImages.length ? finalImages : null,
       stock: Number($(`${formId}-stock`).value) || 0,
+      moq: Number($(`${formId}-moq`).value) || 1,
+      is_combo: isCombo,
+      combo_moq: isCombo && $(`${formId}-combo_moq`).value ? Number($(`${formId}-combo_moq`).value) : null,
+      combo_label: isCombo ? ($(`${formId}-combo_label`).value.trim() || null) : null,
       seo_title: $(`${formId}-seo_title`).value.trim() || null,
       seo_description: $(`${formId}-seo_description`).value.trim() || null,
     };
+    // Validate combo MOQ
+    if (isCombo && (!payload.combo_moq || payload.combo_moq < 1)) {
+      return showToast('Combo MOQ is required and must be at least 1.', 'error');
+    }
     let res;
     if (isEdit) {
       res = await supabaseClient.from('products').update(payload).eq('id', p.id).select().single();
