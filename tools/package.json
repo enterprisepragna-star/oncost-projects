@@ -1,0 +1,14 @@
+{
+  "name": "oncost-bulk-upload-tools",
+  "version": "1.0.0",
+  "description": "Bulk product upload script for ONCOST admin",
+  "scripts": {
+    "upload": "node bulk-upload.js",
+    "dry-run": "node bulk-upload.js --dry-run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "xlsx": "^0.18.5",
+    "dotenv": "^16.4.5"
+  }
+}
