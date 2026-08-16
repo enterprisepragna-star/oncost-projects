@@ -85,6 +85,35 @@ module.exports = async function handler(req, res) {
       </div>`;
       break;
 
+    case 'admin_new_order': {
+      recipient = ADMIN_EMAIL;
+      const items = Array.isArray(data.items) ? data.items : [];
+      subject = `🛒 New order on oncost.shop · ${data.order_id || ''} · ₹${data.amount || ''}`;
+      html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
+        <div style="background:#7a1f35;color:#f2dd92;padding:20px 24px;border-radius:8px 8px 0 0;">
+          <h2 style="margin:0;font-family:Georgia,serif;">🎉 You have a new order!</h2>
+          <p style="margin:4px 0 0;opacity:.85;font-size:13px;">${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</p>
+        </div>
+        <div style="background:#fff;padding:24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
+          <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <tr><td style="padding:6px 0;color:#7a726b;width:130px;">Order ID:</td><td><strong style="font-family:monospace;">${(data.order_id || '')}</strong></td></tr>
+            <tr><td style="padding:6px 0;color:#7a726b;">Amount:</td><td><strong style="color:#1E8449;font-size:16px;">₹${(data.amount || '')}</strong></td></tr>
+            <tr><td style="padding:6px 0;color:#7a726b;">Customer:</td><td>${(data.customer_name || '—')}</td></tr>
+            <tr><td style="padding:6px 0;color:#7a726b;">Email:</td><td>${(data.customer_email || '—')}</td></tr>
+            <tr><td style="padding:6px 0;color:#7a726b;">Phone:</td><td>${(data.customer_phone || '—')}</td></tr>
+            <tr><td style="padding:6px 0;color:#7a726b;">City:</td><td>${(data.city || '—')}</td></tr>
+            ${data.gift_wrap ? `<tr><td style="padding:6px 0;color:#92600A;">Gift Wrap:</td><td><strong>YES (+₹50)</strong>${data.gift_message ? ` — note: "${data.gift_message}"` : ''}</td></tr>` : ''}
+          </table>
+          ${items.length ? `<h4 style="margin:16px 0 8px;font-size:13px;color:#7a726b;">ITEMS</h4>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            ${items.map(it => `<tr style="border-bottom:1px solid #f0e9dc;"><td style="padding:6px 0;">${(it.name || 'Item')}</td><td style="text-align:center;">× ${(it.qty || it.quantity || 1)}</td><td style="text-align:right;">₹${(it.price || 0)}</td></tr>`).join('')}
+          </table>` : ''}
+          <p style="margin-top:20px;text-align:center;"><a href="https://www.oncost.shop/admin-dashboard.html" style="background:#7a1f35;color:#f2dd92;padding:12px 26px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Click here to view the order details →</a></p>
+        </div>
+      </div>`;
+      break;
+    }
+
     case 'order_confirm':
     case 'order_invoice': {
       // Optionally load order + products from Supabase to attach PDF invoice

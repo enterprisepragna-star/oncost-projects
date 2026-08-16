@@ -950,10 +950,7 @@ html { scroll-behavior: smooth; }
 .btn { transition: transform .12s ease, box-shadow .15s ease, background-color .15s ease, color .15s ease, border-color .15s ease; }
 .btn:active { transform: scale(.97); }
 
-/* Image shimmer while lazy-loading */
+/* Image placeholder while lazy-loading (static — no infinite animation, keeps INP healthy) */
 .product-card .thumb, .pd-gallery, .oc-thumb {
-  background-image: linear-gradient(100deg, #f4ede2 40%, #fbf6ec 50%, #f4ede2 60%);
-  background-size: 200% 100%;
-  animation: shimmer 1.6s linear infinite;
+  background-image: linear-gradient(135deg, #f4ede2, #fbf6ec 55%, #f4ede2);
 }
-@keyframes shimmer { to { background-position: -200% 0; } }

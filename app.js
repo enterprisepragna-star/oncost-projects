@@ -154,7 +154,7 @@ async function loadProducts() {
 function productCardHTML(p) {
   const stock = Number(p.stock || 0);
   const imgHTML = p.image_url
-    ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'placeholder',innerHTML:'<i class=\\'fas fa-image\\'></i>'}))" />`
+    ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}" loading="lazy" decoding="async" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'placeholder',innerHTML:'<i class=\\'fas fa-image\\'></i>'}))" />`
     : `<div class="placeholder"><i class="fas fa-image"></i></div>`;
   const offer = p.offer_price && Number(p.offer_price) > 0 && Number(p.offer_price) < Number(p.price);
   const save = offer ? Math.round(((p.price - p.offer_price) / p.price) * 100) : 0;
@@ -339,11 +339,11 @@ async function renderProductDetail() {
   const mainImg = allImages[0] || null;
   const galleryHTML = allImages.length > 1
     ? `<div class="pd-thumbs" data-testid="pd-thumbs">
-        ${allImages.map((u, i) => `<button class="pd-thumb ${i===0?'active':''}" data-idx="${i}" data-img="${escapeHTML(u)}" type="button" aria-label="View image ${i+1}" data-testid="pd-thumb-${i}"><img src="${escapeHTML(u)}" alt="" loading="lazy" /></button>`).join('')}
+        ${allImages.map((u, i) => `<button class="pd-thumb ${i===0?'active':''}" data-idx="${i}" data-img="${escapeHTML(u)}" type="button" aria-label="View image ${i+1}" data-testid="pd-thumb-${i}"><img src="${escapeHTML(u)}" alt="" loading="lazy" decoding="async" /></button>`).join('')}
       </div>`
     : '';
   const imgHTML = mainImg
-    ? `<img id="pd-main-img" src="${escapeHTML(mainImg)}" alt="${escapeHTML(p.name)}" class="img-fade" onload="this.classList.add('loaded')" />
+    ? `<img id="pd-main-img" src="${escapeHTML(mainImg)}" alt="${escapeHTML(p.name)}" class="img-fade" decoding="async" onload="this.classList.add('loaded')" />
        <button type="button" class="pd-expand-btn" id="pd-expand" title="View fullscreen" data-testid="pd-expand"><i class="fas fa-expand"></i></button>`
     : `<div class="placeholder"><i class="fas fa-image"></i></div>`;
 
@@ -744,6 +744,7 @@ function renderCart() {
 window.applyCoupon = async function() {
   if (state.appliedCoupon) {
     state.appliedCoupon = null;
+    sessionStorage.removeItem('oncost_coupon');
     renderCart();
     return;
   }
@@ -764,6 +765,7 @@ window.applyCoupon = async function() {
       return;
     }
     state.appliedCoupon = res.coupon;
+    sessionStorage.setItem('oncost_coupon', JSON.stringify(res.coupon));
     renderCart();
     toast(`Coupon ${res.coupon.code} applied`, 'ok');
   } catch (e) {
@@ -882,7 +884,7 @@ window.openLightbox = function(images, startIdx = 0, alt = '') {
     ${images.length > 1 ? `
       <button class="lb-nav lb-prev" aria-label="Previous image" data-testid="lb-prev"><i class="fas fa-chevron-left"></i></button>
       <button class="lb-nav lb-next" aria-label="Next image" data-testid="lb-next"><i class="fas fa-chevron-right"></i></button>` : ''}
-    <div class="lb-stage"><img class="lb-img" src="${escapeHTML(images[idx])}" alt="${escapeHTML(alt)}" draggable="false" /></div>
+    <div class="lb-stage"><img class="lb-img" src="${escapeHTML(images[idx])}" alt="${escapeHTML(alt)}" draggable="false" decoding="async" /></div>
     <div class="lb-footer">
       <span class="lb-counter" data-testid="lb-counter">${idx + 1} / ${images.length}</span>
       ${images.length > 1 ? `<div class="lb-dots">${images.map((_, i) => `<button class="lb-dot ${i===idx?'on':''}" data-i="${i}"></button>`).join('')}</div>` : ''}
@@ -1294,7 +1296,7 @@ function renderAccountOrders(orders) {
     const itemRows = items.length ? items.map(it => {
       const prod = state.products.find(p => p.id === it.product_id);
       const img = prod?.image_url
-        ? `<img src="${escapeHTML(prod.image_url)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />`
+        ? `<img src="${escapeHTML(prod.image_url)}" alt="" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />`
         : `<i class="fas fa-gift" style="color:var(--muted);"></i>`;
       const qty = Number(it.qty || it.quantity || 1);
       const price = Number(it.price || 0);
@@ -1752,6 +1754,11 @@ window.submitFeedback = async function(orderId, productId) {
 
 // ---------- Boot ----------
 async function bootstrap() {
+  // Restore coupon applied on a previous page (cart → checkout persistence)
+  try {
+    const c = JSON.parse(sessionStorage.getItem('oncost_coupon') || 'null');
+    if (c && c.code) state.appliedCoupon = c;
+  } catch { /* ignore */ }
   await Promise.all([loadAuth(), loadSettings(), loadSaleEvents(), loadCategories(), loadProducts(), loadTestimonials()]);
   await Promise.all([loadCart(), loadWishlist()]);
 

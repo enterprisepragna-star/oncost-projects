@@ -198,6 +198,25 @@ module.exports = async function handler(req, res) {
         }),
       }).catch(err => console.error('[ccavenue/response] order_invoice email failed:', err.message));
     }
+    // Admin "new order" notification
+    fetch(`${SITE_URL}/api/email/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
+      body: JSON.stringify({
+        type: 'admin_new_order',
+        data: {
+          order_id: orderId,
+          amount: String(amount || orderRow.total_amount || ''),
+          customer_name: name,
+          customer_email: email || '',
+          customer_phone: orderRow.guest_phone || (orderRow.shipping_address && orderRow.shipping_address.phone) || '',
+          city: (orderRow.shipping_address && orderRow.shipping_address.city) || '',
+          items: orderRow.items || [],
+          gift_wrap: !!orderRow.gift_wrap,
+          gift_message: orderRow.gift_message || '',
+        },
+      }),
+    }).catch(err => console.error('[ccavenue/response] admin_new_order email failed:', err.message));
   }
 
   // ============= FIRE-AND-FORGET WHATSAPP CONFIRM =============
