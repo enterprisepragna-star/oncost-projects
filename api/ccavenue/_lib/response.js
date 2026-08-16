@@ -157,50 +157,68 @@ module.exports = async function handler(req, res) {
     }
     // Server-side cart clear on successful payment (logged-in customers)
     if (dbStatus === 'Paid' && orderRow.user_id) {
-      fetch(`${SUPABASE_URL}/rest/v1/cart_items?user_id=eq.${orderRow.user_id}`, {
-        method: 'DELETE',
-        headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-      }).then(() => console.log('[ccavenue/response] cart cleared for user', orderRow.user_id))
-        .catch(err => console.error('[ccavenue/response] cart clear failed:', err.message));
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/cart_items?user_id=eq.${orderRow.user_id}`, {
+          method: 'DELETE',
+          headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+        });
+        console.log('[ccavenue/response] cart cleared for user', orderRow.user_id);
+      } catch(err) {
+        console.error('[ccavenue/response] cart clear failed:', err.message);
+      }
     }
   }
 
   // ============= AUTO-CREATE DELHIVERY AWB ON PAID =============
   if (dbStatus === 'Paid' && orderRow && !orderRow.awb_number && process.env.DELHIVERY_TOKEN) {
-    const ADMIN_KEY = process.env.ADMIN_RECOVERY_KEY;
-    fetch(`${SITE_URL}/api/delhivery/create-shipment`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY || '' },
-      body: JSON.stringify({ order_id: orderRow.id }),
-    }).then(r => r.json()).then(j => {
-      console.log('[ccavenue/response] AWB auto-create result:', JSON.stringify(j));
-    }).catch(err => console.error('[ccavenue/response] AWB auto-create failed:', err.message));
-  }
-
-  // ============= FIRE-AND-FORGET ORDER INVOICE EMAIL (Resend + PDF) =============
-  if (dbStatus === 'Paid' && orderRow && process.env.RESEND_API_KEY) {
-    const email = orderRow.guest_email || (orderRow.shipping_address && orderRow.shipping_address.email);
-    const name  = (orderRow.shipping_address && orderRow.shipping_address.name) || 'Customer';
-    if (email) {
-      fetch(`${SITE_URL}/api/email/send`, {
+    try {
+      const ADMIN_KEY = process.env.ADMIN_RECOVERY_KEY;
+      const r = await fetch(`${SITE_URL}/api/delhivery/create-shipment`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
-        body: JSON.stringify({
-          type: 'order_invoice',
-          to: email,
-          order_id: orderRow.id,
-          data: {
-            name,
-            order_id: orderId,
-            amount: String(amount || orderRow.total_amount || ''),
-            invoice_url: `${SITE_URL}/thank-you.html?status=success&order_id=${encodeURIComponent(orderId)}&tracking_id=${encodeURIComponent(trackingId||'')}&amount=${encodeURIComponent(amount||'')}`,
-          },
-        }),
-      }).catch(err => console.error('[ccavenue/response] order_invoice email failed:', err.message));
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY || '' },
+        body: JSON.stringify({ order_id: orderRow.id }),
+      });
+      const j = await r.json();
+      console.log('[ccavenue/response] AWB auto-create result:', JSON.stringify(j));
+    } catch(err) {
+      console.error('[ccavenue/response] AWB auto-create failed:', err.message);
     }
   }
 
-  // ============= FIRE-AND-FORGET WHATSAPP CONFIRM =============
+  // ============= NOTIFY ADMIN ABOUT NEW ORDER =============
+  if (dbStatus === 'Paid' && orderRow && process.env.RESEND_API_KEY) {
+    try {
+      const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'enterprisepragna@oncost.shop';
+      await fetch(`${SITE_URL}/api/email/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
+        body: JSON.stringify({
+          type: 'custom',
+          to: ADMIN_EMAIL,
+          data: {
+            subject: `🔔 New Order Received! · ${orderId}`,
+            html: `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
+              <div style="background:#7a1f35;color:#f2dd92;padding:24px;border-radius:8px 8px 0 0;text-align:center;">
+                <h1 style="margin:0;font-family:Georgia,serif;font-size:26px;">New Order Placed</h1>
+              </div>
+              <div style="background:#fff;padding:24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
+                <p><strong>Order ID:</strong> ${orderId}</p>
+                <p><strong>Total Amount:</strong> ₹${amount || orderRow.total_amount}</p>
+                <p><strong>Customer:</strong> ${(orderRow.shipping_address && orderRow.shipping_address.name) || 'Customer'}</p>
+                <p><strong>Email:</strong> ${orderRow.guest_email || (orderRow.shipping_address && orderRow.shipping_address.email)}</p>
+                <p style="margin-top:24px;"><a href="${SITE_URL}/admin-dashboard.html#orders" style="background:#7a1f35;color:#f2dd92;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">View in Admin Panel →</a></p>
+              </div>
+            </div>`
+          },
+        }),
+      });
+      console.log('[ccavenue/response] Admin order notification sent');
+    } catch(err) {
+      console.error('[ccavenue/response] Admin notification failed:', err.message);
+    }
+  }
+
+  // ============= SEND ORDER CONFIRMATION TO CUSTOMER =============
   if (dbStatus === 'Paid' && orderRow) {
     const INTERNAL_KEY = process.env.INTERNAL_API_KEY;
     const phone = orderRow.guest_phone || (orderRow.shipping_address && orderRow.shipping_address.phone);
@@ -208,24 +226,32 @@ module.exports = async function handler(req, res) {
     
     // 1. Send WhatsApp confirmation
     if (phone) {
-      fetch(`${SITE_URL}/api/whatsapp?action=send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(INTERNAL_KEY ? { 'x-internal-key': INTERNAL_KEY } : {}) },
-        body: JSON.stringify({
-          type: 'order_confirm',
-          to: phone,
-          params: {
-            customer_name: name,
-            order_id: orderId,
-            amount: String(amount || orderRow.total_amount || ''),
-            tracking_url: `${SITE_URL}/account.html?tab=orders`,
-          },
-        }),
-      }).catch(err => console.error('[ccavenue/response] WhatsApp confirm failed:', err.message));
+      try {
+        await fetch(`${SITE_URL}/api/whatsapp?action=send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(INTERNAL_KEY ? { 'x-internal-key': INTERNAL_KEY } : {}) },
+          body: JSON.stringify({
+            type: 'order_confirm',
+            to: phone,
+            params: {
+              customer_name: name,
+              order_id: orderId,
+              amount: String(amount || orderRow.total_amount || ''),
+              tracking_url: `${SITE_URL}/account.html?tab=orders`,
+            },
+          }),
+        });
+      } catch(err) {
+        console.error('[ccavenue/response] WhatsApp confirm failed:', err.message);
+      }
     }
 
     // 2. Send Custom HTML Invoice Email
-    sendOrderConfirmation(orderRow).catch(err => console.error('[ccavenue/response] Email confirm failed:', err.message));
+    try {
+      await sendOrderConfirmation(orderRow);
+    } catch(err) {
+      console.error('[ccavenue/response] Email confirm failed:', err.message);
+    }
   }
 
   // ============= REDIRECT TO THANK-YOU =============

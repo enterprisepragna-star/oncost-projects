@@ -541,6 +541,7 @@ window.addToCartFromDetail = async function(productId) {
 
 // ---------- Cart ----------
 async function loadCart() {
+  try { state.appliedCoupon = JSON.parse(localStorage.getItem('oncost_coupon') || 'null'); } catch { state.appliedCoupon = null; }
   if (!state.user) {
     // Guest cart in localStorage
     try { state.cart = JSON.parse(localStorage.getItem('oncost_cart') || '[]'); }
@@ -744,6 +745,7 @@ function renderCart() {
 window.applyCoupon = async function() {
   if (state.appliedCoupon) {
     state.appliedCoupon = null;
+    localStorage.removeItem('oncost_coupon');
     renderCart();
     return;
   }
@@ -764,6 +766,7 @@ window.applyCoupon = async function() {
       return;
     }
     state.appliedCoupon = res.coupon;
+    localStorage.setItem('oncost_coupon', JSON.stringify(res.coupon));
     renderCart();
     toast(`Coupon ${res.coupon.code} applied`, 'ok');
   } catch (e) {

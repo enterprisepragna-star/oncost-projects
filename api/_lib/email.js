@@ -3,7 +3,7 @@ const { generateInvoicePDF } = require('../email/_lib/invoice-pdf');
 
 // Requires RESEND_API_KEY in environment
 const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key');
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'orders@oncost.shop'; // Ensure this domain is verified in Resend
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'enterprisepragna@oncost.shop'; // Ensure this domain is verified in Resend
 
 function formatINR(val) {
   return '₹' + Number(val || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
