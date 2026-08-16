@@ -257,17 +257,20 @@ function renderHeroSlideshow() {
 }
 
 function renderProductsListing() {
+  // Update page title if filtering by category
+  const catParam = param('cat');
+  if (catParam) {
+    document.title = `${catParam} — ONCOST`;
+    const h1 = document.querySelector('.page-hero h1');
+    if (h1) h1.textContent = catParam;
+    const sub = document.querySelector('.page-hero p');
+    if (sub) sub.textContent = `Showing products in "${catParam}"`;
+  }
   const slot = $('[data-products]');
   if (!slot) return;
   const q = ($('[data-product-search]')?.value || '').toLowerCase().trim();
   const cat = ($('[data-product-filter]')?.value || param('cat') || 'all');
   const sort = ($('[data-product-sort]')?.value || 'default');
-
-  // Set category filter from query param on first render
-  if (param('cat') && $('[data-product-filter]') && !$('[data-product-filter]').dataset.set) {
-    $('[data-product-filter]').value = param('cat');
-    $('[data-product-filter]').dataset.set = '1';
-  }
 
   let items = state.products.slice();
   if (cat && cat !== 'all') items = items.filter(p => (p.category||'').toLowerCase() === cat.toLowerCase());
@@ -290,6 +293,12 @@ function populateCategoryFilter() {
   if (!sel) return;
   const existing = state.categories.map(c => c.name);
   sel.innerHTML = `<option value="all">All Collections</option>` + existing.map(n => `<option value="${escapeHTML(n)}">${escapeHTML(n)}</option>`).join('');
+  // Apply pending cat param now that options exist
+  const pending = sel.dataset.pendingCat || param('cat');
+  if (pending) {
+    sel.value = pending;
+    delete sel.dataset.pendingCat;
+  }
 }
 
 async function renderProductDetail() {
@@ -1791,6 +1800,16 @@ async function bootstrap() {
   renderHomeCollections();
   renderHeroSlideshow();
   populateCategoryFilter();
+  // Apply ?cat= URL param to filter dropdown AFTER options are populated
+  const catParam = param('cat');
+  if (catParam) {
+    const sel = $('[data-product-filter]');
+    if (sel) {
+      sel.value = catParam;
+      // If the option doesn't exist yet (categories still loading), store it
+      if (sel.value !== catParam) sel.dataset.pendingCat = catParam;
+    }
+  }
   renderProductsListing();
   renderProductDetail();
   renderReviewsMarquee();
