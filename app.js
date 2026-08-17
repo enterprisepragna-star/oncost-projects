@@ -687,7 +687,7 @@ function cartTotals() {
   let discount = 0;
   if (state.appliedCoupon) {
     const dv = Number(state.appliedCoupon.discount_value ?? state.appliedCoupon.discount_amount ?? 0) || 0;
-    if (state.appliedCoupon.discount_type === 'percent') discount = subtotal * dv / 100;
+    if (state.appliedCoupon.discount_type === 'percent' || state.appliedCoupon.discount_type === 'percentage') discount = subtotal * dv / 100;
     else discount = dv;
     discount = Math.min(Math.max(0, discount), subtotal);
   }

@@ -67,8 +67,11 @@ module.exports = async function handler(req, res) {
         if (minOrder && subtotal < minOrder) throw new Error('Minimum order not met for coupon');
 
         // Use verified discount from DB (supports flat ₹ and percent types)
-        const dv = Number(coup.discount_value ?? coup.discount_amount ?? 0);
-        discountAmt = coup.discount_type === 'percent' ? (subtotal * dv) / 100 : dv;
+        if (coup.discount_type === 'percent' || coup.discount_type === 'percentage') {
+          discountAmt = (subtotal * coup.discount_value) / 100;
+        } else {
+          discountAmt = Number(coup.discount_value ?? coup.discount_amount ?? 0);
+        }
         discountAmt = Math.min(Math.max(0, discountAmt), subtotal);
       } else {
         throw new Error('Invalid coupon');
