@@ -188,7 +188,7 @@ module.exports = async function handler(req, res) {
   // ============= NOTIFY ADMIN ABOUT NEW ORDER =============
   if (dbStatus === 'Paid' && orderRow) {
     // Admin "new order" notification (Detailed version)
-    fetch(`${SITE_URL}/api/email/send`, {
+    await fetch(`${SITE_URL}/api/email/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
       body: JSON.stringify({
@@ -206,8 +206,7 @@ module.exports = async function handler(req, res) {
         },
       }),
     })
-      .then(r => r.json())
-      .then(() => console.log('[ccavenue/response] Admin order notification sent'))
+      .then(async (r) => { const text = await r.text(); console.log('[ccavenue/response] Admin order notification sent:', text); })
       .catch(err => console.error('[ccavenue/response] admin_new_order email failed:', err.message));
   }
 

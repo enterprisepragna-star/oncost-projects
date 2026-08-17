@@ -283,7 +283,7 @@
       }
     }
 
-    if (status === 'success') {
+    if (status.toLowerCase() === 'success') {
       document.getElementById('invoice-section').style.display = 'block';
       const cmpLink = document.getElementById('ty-complaint-link');
       if (cmpLink && orderId) cmpLink.href = 'support.html?order_id=' + encodeURIComponent(orderId);
