@@ -183,7 +183,11 @@ module.exports = async function handler(req, res) {
     } catch(err) {
       console.error('[ccavenue/response] AWB auto-create failed:', err.message);
     }
-    // Admin "new order" notification
+  }
+
+  // ============= NOTIFY ADMIN ABOUT NEW ORDER =============
+  if (dbStatus === 'Paid' && orderRow) {
+    // Admin "new order" notification (Detailed version)
     fetch(`${SITE_URL}/api/email/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
@@ -201,40 +205,10 @@ module.exports = async function handler(req, res) {
           gift_message: orderRow.gift_message || '',
         },
       }),
-    }).catch(err => console.error('[ccavenue/response] admin_new_order email failed:', err.message));
-  }
-
-  // ============= NOTIFY ADMIN ABOUT NEW ORDER =============
-  if (dbStatus === 'Paid' && orderRow && process.env.RESEND_API_KEY) {
-    try {
-      const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'enterprisepragna@oncost.shop';
-      await fetch(`${SITE_URL}/api/email/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
-        body: JSON.stringify({
-          type: 'custom',
-          to: ADMIN_EMAIL,
-          data: {
-            subject: `🔔 New Order Received! · ${orderId}`,
-            html: `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
-              <div style="background:#7a1f35;color:#f2dd92;padding:24px;border-radius:8px 8px 0 0;text-align:center;">
-                <h1 style="margin:0;font-family:Georgia,serif;font-size:26px;">New Order Placed</h1>
-              </div>
-              <div style="background:#fff;padding:24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
-                <p><strong>Order ID:</strong> ${orderId}</p>
-                <p><strong>Total Amount:</strong> ₹${amount || orderRow.total_amount}</p>
-                <p><strong>Customer:</strong> ${(orderRow.shipping_address && orderRow.shipping_address.name) || 'Customer'}</p>
-                <p><strong>Email:</strong> ${orderRow.guest_email || (orderRow.shipping_address && orderRow.shipping_address.email)}</p>
-                <p style="margin-top:24px;"><a href="${SITE_URL}/admin-dashboard.html#orders" style="background:#7a1f35;color:#f2dd92;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;">View in Admin Panel →</a></p>
-              </div>
-            </div>`
-          },
-        }),
-      });
-      console.log('[ccavenue/response] Admin order notification sent');
-    } catch(err) {
-      console.error('[ccavenue/response] Admin notification failed:', err.message);
-    }
+    })
+      .then(r => r.json())
+      .then(() => console.log('[ccavenue/response] Admin order notification sent'))
+      .catch(err => console.error('[ccavenue/response] admin_new_order email failed:', err.message));
   }
 
   // ============= SEND ORDER CONFIRMATION TO CUSTOMER =============
