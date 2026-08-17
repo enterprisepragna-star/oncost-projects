@@ -550,7 +550,7 @@ window.addToCartFromDetail = async function(productId) {
 
 // ---------- Cart ----------
 async function loadCart() {
-  try { state.appliedCoupon = JSON.parse(localStorage.getItem('oncost_coupon') || 'null'); } catch { state.appliedCoupon = null; }
+  try { state.appliedCoupon = JSON.parse(sessionStorage.getItem('oncost_coupon') || 'null'); } catch { state.appliedCoupon = null; }
   if (!state.user) {
     // Guest cart in localStorage
     try { state.cart = JSON.parse(localStorage.getItem('oncost_cart') || '[]'); }
