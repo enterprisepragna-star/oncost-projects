@@ -6,7 +6,7 @@
 // INSERT a new row using the decrypted payload as the only source of truth.
 
 const { decrypt, parseResponse } = require('./ccavenue-crypto');
-const { sendOrderConfirmation } = require('../../_lib/email');
+const { sendOrderConfirmation, sendAdminNewOrder } = require('../../_lib/email');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') { res.status(405).send('Method Not Allowed'); return; }
@@ -189,26 +189,9 @@ module.exports = async function handler(req, res) {
       );
     }
 
-    // 2. Admin New Order Notification
+    // 2. Admin New Order Notification (called natively to avoid Vercel loop)
     promises.push(
-      fetch(`${SITE_URL}/api/email/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
-        body: JSON.stringify({
-          type: 'admin_new_order',
-          data: {
-            order_id: orderId,
-            amount: String(amount || orderRow.total_amount || ''),
-            customer_name: name,
-            customer_email: email,
-            customer_phone: phone || '',
-            city: (orderRow.shipping_address && orderRow.shipping_address.city) || '',
-            items: orderRow.items || [],
-            gift_wrap: !!orderRow.gift_wrap,
-            gift_message: orderRow.gift_message || '',
-          },
-        }),
-      }).catch(err => console.error('[ccavenue/response] admin_new_order email failed:', err.message))
+      sendAdminNewOrder(orderRow)
     );
 
     // 3. WhatsApp Customer Confirmation
