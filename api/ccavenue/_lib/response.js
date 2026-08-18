@@ -169,57 +169,52 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // ============= AUTO-CREATE DELHIVERY AWB ON PAID =============
-  if (dbStatus === 'Paid' && orderRow && !orderRow.awb_number && process.env.DELHIVERY_TOKEN) {
-    try {
-      const ADMIN_KEY = process.env.ADMIN_RECOVERY_KEY;
-      const r = await fetch(`${SITE_URL}/api/delhivery/create-shipment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY || '' },
-        body: JSON.stringify({ order_id: orderRow.id }),
-      });
-      const j = await r.json();
-      console.log('[ccavenue/response] AWB auto-create result:', JSON.stringify(j));
-    } catch(err) {
-      console.error('[ccavenue/response] AWB auto-create failed:', err.message);
-    }
-  }
-
-  // ============= NOTIFY ADMIN ABOUT NEW ORDER =============
+  // ============= CONCURRENT NOTIFICATIONS & AWB PROCESSING =============
+  // Vercel functions timeout if sequential awaits exceed 10 seconds. We run them concurrently.
   if (dbStatus === 'Paid' && orderRow) {
-    // Admin "new order" notification (Detailed version)
-    await fetch(`${SITE_URL}/api/email/send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
-      body: JSON.stringify({
-        type: 'admin_new_order',
-        data: {
-          order_id: orderId,
-          amount: String(amount || orderRow.total_amount || ''),
-          customer_name: name,
-          customer_email: email || '',
-          customer_phone: orderRow.guest_phone || (orderRow.shipping_address && orderRow.shipping_address.phone) || '',
-          city: (orderRow.shipping_address && orderRow.shipping_address.city) || '',
-          items: orderRow.items || [],
-          gift_wrap: !!orderRow.gift_wrap,
-          gift_message: orderRow.gift_message || '',
-        },
-      }),
-    })
-      .then(async (r) => { const text = await r.text(); console.log('[ccavenue/response] Admin order notification sent:', text); })
-      .catch(err => console.error('[ccavenue/response] admin_new_order email failed:', err.message));
-  }
-
-  // ============= SEND ORDER CONFIRMATION TO CUSTOMER =============
-  if (dbStatus === 'Paid' && orderRow) {
+    const promises = [];
     const INTERNAL_KEY = process.env.INTERNAL_API_KEY;
     const phone = orderRow.guest_phone || (orderRow.shipping_address && orderRow.shipping_address.phone);
     const name  = (orderRow.shipping_address && orderRow.shipping_address.name) || 'Customer';
-    
-    // 1. Send WhatsApp confirmation
+    const email = orderRow.guest_email || (orderRow.shipping_address && orderRow.shipping_address.email) || '';
+
+    // 1. Auto-create Delhivery AWB
+    if (!orderRow.awb_number && process.env.DELHIVERY_TOKEN) {
+      promises.push(
+        fetch(`${SITE_URL}/api/delhivery/create-shipment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-key': process.env.ADMIN_RECOVERY_KEY || '' },
+          body: JSON.stringify({ order_id: orderRow.id }),
+        }).catch(err => console.error('[ccavenue/response] AWB auto-create failed:', err.message))
+      );
+    }
+
+    // 2. Admin New Order Notification
+    promises.push(
+      fetch(`${SITE_URL}/api/email/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal': '1' },
+        body: JSON.stringify({
+          type: 'admin_new_order',
+          data: {
+            order_id: orderId,
+            amount: String(amount || orderRow.total_amount || ''),
+            customer_name: name,
+            customer_email: email,
+            customer_phone: phone || '',
+            city: (orderRow.shipping_address && orderRow.shipping_address.city) || '',
+            items: orderRow.items || [],
+            gift_wrap: !!orderRow.gift_wrap,
+            gift_message: orderRow.gift_message || '',
+          },
+        }),
+      }).catch(err => console.error('[ccavenue/response] admin_new_order email failed:', err.message))
+    );
+
+    // 3. WhatsApp Customer Confirmation
     if (phone) {
-      try {
-        await fetch(`${SITE_URL}/api/whatsapp?action=send`, {
+      promises.push(
+        fetch(`${SITE_URL}/api/whatsapp?action=send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(INTERNAL_KEY ? { 'x-internal-key': INTERNAL_KEY } : {}) },
           body: JSON.stringify({
@@ -232,18 +227,17 @@ module.exports = async function handler(req, res) {
               tracking_url: `${SITE_URL}/account.html?tab=orders`,
             },
           }),
-        });
-      } catch(err) {
-        console.error('[ccavenue/response] WhatsApp confirm failed:', err.message);
-      }
+        }).catch(err => console.error('[ccavenue/response] WhatsApp confirm failed:', err.message))
+      );
     }
 
-    // 2. Send Custom HTML Invoice Email
-    try {
-      await sendOrderConfirmation(orderRow);
-    } catch(err) {
-      console.error('[ccavenue/response] Email confirm failed:', err.message);
-    }
+    // 4. Customer Custom HTML Invoice Email
+    promises.push(
+      sendOrderConfirmation(orderRow).catch(err => console.error('[ccavenue/response] Email confirm failed:', err.message))
+    );
+
+    // Wait for all concurrent tasks to settle
+    await Promise.allSettled(promises);
   }
 
   // ============= REDIRECT TO THANK-YOU =============
