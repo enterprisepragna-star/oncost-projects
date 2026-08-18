@@ -13,7 +13,7 @@ module.exports = async function handler(req, res) {
   const RESEND_API_KEY  = (process.env.RESEND_API_KEY  || '').trim();
   const FROM_EMAIL      = (process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev').trim();
   const REPLY_TO        = (process.env.RESEND_REPLY_TO || '').trim();
-  const ADMIN_EMAIL     = (process.env.ADMIN_EMAIL || 'enterprisepragna@oncost.shop').trim();
+  const ADMIN_EMAIL     = 'enterprisepragna@oncost.shop';
   const ADMIN_KEY       = process.env.ADMIN_RECOVERY_KEY;
   let SUPABASE_URL    = (process.env.SUPABASE_URL || '').trim();
   if (!SUPABASE_URL.startsWith('http') || SUPABASE_URL.startsWith('sb_')) {
