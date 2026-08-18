@@ -166,15 +166,20 @@ async function sendAdminNewOrder(order) {
   </div>`;
 
   try {
-    await resend.emails.send({
-      from: `ONCOST Admin <${FROM_EMAIL}>`,
+    const { data, error } = await resend.emails.send({
+      from: `ONCOST System <system@oncost.shop>`,
       to: [ADMIN_EMAIL],
       subject: `🛒 New order on oncost.shop · ${orderId} · ₹${amount}`,
       html: html,
     });
-    console.log(`[Email] Admin notification sent successfully to ${ADMIN_EMAIL}`);
+    
+    if (error) {
+      console.error(`[Email] Failed to send admin notification (Resend API Error):`, JSON.stringify(error));
+    } else {
+      console.log(`[Email] Admin notification sent successfully to ${ADMIN_EMAIL}`);
+    }
   } catch (err) {
-    console.error(`[Email] Failed to send admin notification: `, err.message);
+    console.error(`[Email] Failed to send admin notification (Exception):`, err.message);
   }
 }
 
@@ -198,16 +203,21 @@ async function sendOrderConfirmation(order) {
       console.error('[Email] PDF generation failed:', e.message);
     }
 
-    await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: `ONCOST Orders <${FROM_EMAIL}>`,
       to: [toEmail],
       subject: `Order Confirmation & Invoice #${order.id.substring(0, 8).toUpperCase()}`,
       html: buildInvoiceHtml(order),
       attachments
     });
-    console.log(`[Email] Order confirmation sent to ${toEmail}`);
+    
+    if (error) {
+      console.error(`[Email] Failed to send order confirmation to ${toEmail} (Resend API Error):`, JSON.stringify(error));
+    } else {
+      console.log(`[Email] Order confirmation sent to ${toEmail}`);
+    }
   } catch (err) {
-    console.error(`[Email] Failed to send order confirmation to ${toEmail}:`, err.message);
+    console.error(`[Email] Failed to send order confirmation to ${toEmail} (Exception):`, err.message);
   }
 }
 
