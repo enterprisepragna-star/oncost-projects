@@ -172,9 +172,9 @@ async function sendAdminNewOrder(order) {
       subject: `🛒 New order on oncost.shop · ${orderId} · ₹${amount}`,
       html: html,
     });
-    console.log(\`[Email] Admin notification sent successfully to \${ADMIN_EMAIL}\`);
+    console.log(`[Email] Admin notification sent successfully to ${ADMIN_EMAIL}`);
   } catch (err) {
-    console.error(\`[Email] Failed to send admin notification: \`, err.message);
+    console.error(`[Email] Failed to send admin notification: `, err.message);
   }
 }
 
