@@ -2097,7 +2097,7 @@ window.createDelhiveryShipment = async function(id) {
   }
 
   try {
-    const r = await fetch('/api/admin/create-delhivery-shipment', {
+    const r = await fetch('/api/delhivery/create-shipment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-key': savedKey },
       body: JSON.stringify({ order_id: id })
