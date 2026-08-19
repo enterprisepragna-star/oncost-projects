@@ -1986,8 +1986,8 @@ function viewOrder(id) {
   const awbBtn = $('ov-gen-awb');
   if (awbBtn) awbBtn.onclick = async () => {
     const dimHtml = `
-      <div id="dim-modal" class="modal" style="display:flex;z-index:9999;">
-        <div class="modal-content" style="max-width:400px;background:#fff;border-radius:8px;padding:24px;">
+      <div id="dim-modal" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:99999;">
+        <div class="modal-content" style="width:100%;max-width:400px;background:#fff;border-radius:8px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25);">
           <h3 style="margin-top:0;color:var(--burgundy);"><i class="fas fa-box"></i> Package Dimensions</h3>
           <p style="font-size:13px;color:var(--admin-text-mute);margin-bottom:16px;">Please confirm the final package details.</p>
           <div class="field" style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;">Weight (grams)</label><input id="dim-w" type="number" class="input" value="500"></div>
