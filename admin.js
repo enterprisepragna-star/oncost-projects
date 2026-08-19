@@ -162,13 +162,16 @@ function goView(view) {
   document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   $('topbar-crumb').textContent = VIEW_TITLES[view] || 'Admin';
   if (window.innerWidth < 800) document.getElementById('sidebar').classList.remove('open');
-  // Re-render views that need fresh data
-  if (view === 'inventory') renderInventory();
-  if (view === 'orders') renderOrders();
-  if (view === 'loyalty') loadLoyaltyCustomers().then(renderLoyalty);
-  if (view === 'customers') loadCustomerDirectory().then(renderCustomers);
-  if (view === 'dashboard') { renderCharts(); renderLowStockAlert(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Yield to the browser to paint the UI update first, fixing INP blocking issues.
+  setTimeout(() => {
+    if (view === 'inventory') renderInventory();
+    if (view === 'orders') renderOrders();
+    if (view === 'loyalty') loadLoyaltyCustomers().then(renderLoyalty);
+    if (view === 'customers') loadCustomerDirectory().then(renderCustomers);
+    if (view === 'dashboard') { renderCharts(); renderLowStockAlert(); }
+  }, 0);
 }
 window.goView = goView;
 

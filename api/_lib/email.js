@@ -9,7 +9,7 @@ function formatINR(val) {
   return '₹' + Number(val || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 }
 
-function buildInvoiceHtml(order) {
+function buildInvoiceHtml(order, isAdmin = false) {
   const items = Array.isArray(order.items) ? order.items : (order.items?.items || []);
   const ship = order.shipping_address || {};
   
@@ -28,19 +28,19 @@ function buildInvoiceHtml(order) {
 
   return `
     <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
-      <div style="text-align: center; padding: 20px 0; background-color: #6C2237; color: white; border-radius: 8px 8px 0 0;">
-        <h1 style="margin: 0; font-size: 24px;">ONCOST</h1>
-        <p style="margin: 5px 0 0;">Order Confirmation & Invoice</p>
+      <div style="text-align: center; padding: 20px 0; background-color: #6C2237; color: ${isAdmin ? '#f2dd92' : 'white'}; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0; font-size: 24px;">${isAdmin ? '🎉 NEW ORDER RECEIVED' : 'ONCOST'}</h1>
+        <p style="margin: 5px 0 0;">${isAdmin ? 'Admin Notification Copy' : 'Order Confirmation & Invoice'}</p>
       </div>
       
       <div style="padding: 30px; border: 1px solid #eaeaea; border-top: none; border-radius: 0 0 8px 8px;">
-        <p style="font-size: 16px;">Hi <strong>${ship.name || 'Customer'}</strong>,</p>
-        <p>Thank you for your purchase! We've received your order and are getting it ready for shipment.</p>
+        <p style="font-size: 16px;">Hi <strong>${isAdmin ? 'Admin' : (ship.name || 'Customer')}</strong>,</p>
+        <p>${isAdmin ? 'A new order has just been successfully paid and placed on your website.' : 'Thank you for your purchase! We\'ve received your order and are getting it ready for shipment.'}</p>
         
         <table style="width: 100%; margin: 20px 0; border-collapse: collapse;">
           <tr>
             <td style="padding-bottom: 10px;"><strong>Invoice / Order ID:</strong> ${order.invoice_number || order.ccavenue_order_id || order.id.substring(0, 8).toUpperCase()}</td>
-            <td style="padding-bottom: 10px; text-align: right;"><strong>Date:</strong> ${new Date(order.created_at || Date.now()).toLocaleDateString()}</td>
+            <td style="padding-bottom: 10px; text-align: right;"><strong>Date:</strong> ${new Date(order.created_at || Date.now()).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}</td>
           </tr>
         </table>
         
@@ -79,22 +79,23 @@ function buildInvoiceHtml(order) {
         </table>
 
         <div style="background-color: #f9f9f9; padding: 20px; border-radius: 6px;">
-          <h4 style="margin-top: 0; margin-bottom: 10px;">Shipping Details</h4>
+          <h4 style="margin-top: 0; margin-bottom: 10px;">${isAdmin ? 'Customer Details' : 'Shipping Details'}</h4>
           <p style="margin: 0;">
-            ${ship.name}<br>
+            <strong>${ship.name}</strong><br>
             ${ship.address}<br>
             ${ship.city}, ${ship.state} ${ship.zip}<br>
-            Phone: ${ship.phone}
+            Phone: ${ship.phone}<br>
+            Email: ${ship.email || order.guest_email || '—'}
           </p>
         </div>
         
         <div style="margin-top: 30px; font-size: 14px; color: #666; text-align: left; background:#f9f9f9; padding: 16px; border-radius:6px; border:1px solid #eaeaea;">
-          <strong>Notes:</strong> Thank you for shopping with us! For returns or queries, contact support within 7 days of delivery.<br><br>
-          <em style="font-size:12px;">This is a computer-generated invoice.</em>
+          <strong>Notes:</strong> ${isAdmin ? 'Log into the ONCOST Admin Dashboard to fulfill this order and generate the shipping label.' : 'Thank you for shopping with us! For returns or queries, contact support within 7 days of delivery.'}<br><br>
+          <em style="font-size:12px;">This is a computer-generated ${isAdmin ? 'notification' : 'invoice'}.</em>
         </div>
         
         <p style="margin-top: 30px; font-size: 14px; color: #666; text-align: center;">
-          If you have any questions, reply to this email or contact us via WhatsApp.
+          ${isAdmin ? 'Powered by ONCOST Platform' : 'If you have any questions, reply to this email or contact us via WhatsApp.'}
         </p>
       </div>
     </div>
@@ -137,33 +138,10 @@ async function sendAdminNewOrder(order) {
   }
   
   const ADMIN_EMAIL = 'enterprisepragna@oncost.shop';
-  const items = Array.isArray(order.items) ? order.items : (order.items?.items || []);
-  const ship = order.shipping_address || {};
   const amount = String(order.total_amount || '');
   const orderId = order.id || order.ccavenue_order_id || '';
   
-  const html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">
-    <div style="background:#7a1f35;color:#f2dd92;padding:20px 24px;border-radius:8px 8px 0 0;">
-      <h2 style="margin:0;font-family:Georgia,serif;">🎉 You have a new order!</h2>
-      <p style="margin:4px 0 0;opacity:.85;font-size:13px;">${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</p>
-    </div>
-    <div style="background:#fff;padding:24px;border:1px solid #e8e0d2;border-top:none;border-radius:0 0 8px 8px;">
-      <table style="width:100%;border-collapse:collapse;font-size:14px;">
-        <tr><td style="padding:6px 0;color:#7a726b;width:130px;">Order ID:</td><td><strong style="font-family:monospace;">${orderId}</strong></td></tr>
-        <tr><td style="padding:6px 0;color:#7a726b;">Amount:</td><td><strong style="color:#1E8449;font-size:16px;">₹${amount}</strong></td></tr>
-        <tr><td style="padding:6px 0;color:#7a726b;">Customer:</td><td>${ship.name || '—'}</td></tr>
-        <tr><td style="padding:6px 0;color:#7a726b;">Email:</td><td>${ship.email || order.guest_email || '—'}</td></tr>
-        <tr><td style="padding:6px 0;color:#7a726b;">Phone:</td><td>${ship.phone || order.guest_phone || '—'}</td></tr>
-        <tr><td style="padding:6px 0;color:#7a726b;">City:</td><td>${ship.city || '—'}</td></tr>
-        ${order.gift_wrap ? `<tr><td style="padding:6px 0;color:#92600A;">Gift Wrap:</td><td><strong>YES (+₹50)</strong>${order.gift_message ? ` — note: "${order.gift_message}"` : ''}</td></tr>` : ''}
-      </table>
-      ${items.length ? `<h4 style="margin:16px 0 8px;font-size:13px;color:#7a726b;">ITEMS</h4>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        ${items.map(it => `<tr style="border-bottom:1px solid #f0e9dc;"><td style="padding:6px 0;">${(it.name || it.product_id || 'Item')}</td><td style="text-align:center;">× ${(it.qty || it.quantity || 1)}</td><td style="text-align:right;">₹${(it.price || 0)}</td></tr>`).join('')}
-      </table>` : ''}
-      <p style="margin-top:20px;text-align:center;"><a href="https://www.oncost.shop/admin-dashboard.html" style="background:#7a1f35;color:#f2dd92;padding:12px 26px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Click here to view the order details →</a></p>
-    </div>
-  </div>`;
+  const html = buildInvoiceHtml(order, true);
 
   try {
     const { data, error } = await resend.emails.send({
