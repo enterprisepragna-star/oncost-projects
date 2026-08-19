@@ -3,6 +3,7 @@
   "framework": null,
   "cleanUrls": true,
   "buildCommand": "echo 'No build needed — static HTML site'",
+  "outputDirectory": ".",
   "installCommand": "npm install --omit=dev --no-audit --no-fund",
   "rewrites": [
     { "source": "/api/delhivery/:action", "destination": "/api/delhivery?action=:action" },
