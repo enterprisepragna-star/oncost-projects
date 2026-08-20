@@ -1377,6 +1377,19 @@ function openProductForm(id) {
       seo_title: $(`${formId}-seo_title`).value.trim() || null,
       seo_description: $(`${formId}-seo_description`).value.trim() || null,
     };
+    // Auto-sum variant stock into parent product stock to avoid storefront "Out of stock" badge
+    if (payload.has_variants && window.__pf_get_variants) {
+      const vList = window.__pf_get_variants();
+      let totalVariantStock = 0;
+      for (const v of vList) {
+        if (!v.variant_label || v.price == null) continue;
+        totalVariantStock += Math.max(0, Number(v.stock || 0));
+      }
+      payload.stock = totalVariantStock;
+      // Also update the UI field so the user sees it immediately
+      $(`${formId}-stock`).value = totalVariantStock;
+    }
+
     // Validate combo MOQ
     if (isCombo && (!payload.combo_moq || payload.combo_moq < 1)) {
       return showToast('Combo MOQ is required and must be at least 1.', 'error');
