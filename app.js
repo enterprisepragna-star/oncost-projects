@@ -160,12 +160,14 @@ function productCardHTML(p) {
   const save = offer ? Math.round(((p.price - p.offer_price) / p.price) * 100) : 0;
   const inWishlist = state.wishlist.some(w => w.product_id === p.id);
   const wishBtn = state.user ? `<button class="wish-btn ${inWishlist?'on':''}" onclick="event.preventDefault();event.stopPropagation();toggleWishlist('${escapeHTML(p.id)}')" data-testid="wish-btn-${escapeHTML(p.id)}" title="${inWishlist?'Remove from wishlist':'Add to wishlist'}"><i class="${inWishlist?'fas':'far'} fa-heart"></i></button>` : '';
+  const shareBtn = `<button class="share-btn" onclick="event.preventDefault();event.stopPropagation(); window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(window.location.origin + '/product.html?id=' + '${escapeHTML(p.id)}'), '_blank')" title="Share on WhatsApp"><i class="fas fa-share-nodes"></i></button>`;
   return `<a class="product-card" href="product.html?id=${encodeURIComponent(p.id)}" data-testid="product-card-${escapeHTML(p.id)}">
     <div class="img-wrap">
       ${imgHTML}
       ${p.badge ? `<span class="badge-pill ${p.badge.toLowerCase().includes('sale') || offer ? 'gold' : ''}">${escapeHTML(p.badge)}</span>` : ''}
       ${stock === 0 ? `<span class="stock-tag">Out of stock</span>` : ''}
       ${wishBtn}
+      ${shareBtn}
     </div>
     <div class="info">
       <div class="cat">${escapeHTML(p.category || 'Premium')}</div>
@@ -351,9 +353,11 @@ async function renderProductDetail() {
         ${allImages.map((u, i) => `<button class="pd-thumb ${i===0?'active':''}" data-idx="${i}" data-img="${escapeHTML(u)}" type="button" aria-label="View image ${i+1}" data-testid="pd-thumb-${i}"><img src="${escapeHTML(u)}" alt="" loading="lazy" decoding="async" /></button>`).join('')}
       </div>`
     : '';
+  const shareBtnDetail = `<button type="button" class="pd-share-btn" onclick="window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(window.location.origin + '/product.html?id=' + '${escapeHTML(p.id)}'), '_blank')" title="Share on WhatsApp"><i class="fas fa-share-nodes"></i></button>`;
   const imgHTML = mainImg
     ? `<img id="pd-main-img" src="${escapeHTML(mainImg)}" alt="${escapeHTML(p.name)}" class="img-fade" decoding="async" onload="this.classList.add('loaded')" />
-       <button type="button" class="pd-expand-btn" id="pd-expand" title="View fullscreen" data-testid="pd-expand"><i class="fas fa-expand"></i></button>`
+       <button type="button" class="pd-expand-btn" id="pd-expand" title="View fullscreen" data-testid="pd-expand"><i class="fas fa-expand"></i></button>
+       ${shareBtnDetail}`
     : `<div class="placeholder"><i class="fas fa-image"></i></div>`;
 
   const related = state.products.filter(x => x.category === p.category && x.id !== p.id).slice(0, 4);
@@ -1841,11 +1845,13 @@ function renderRecentlyViewed() {
             const offer = p.offer_price && p.offer_price < p.price;
             const inWishlist = state.wishlist.some(w => w.product_id === p.id);
             const wishBtn = state.user ? `<button class="wish-btn ${inWishlist?'on':''}" onclick="event.preventDefault();event.stopPropagation();toggleWishlist('${escapeHTML(p.id)}')"><i class="${inWishlist?'fas':'far'} fa-heart"></i></button>` : '';
+            const shareBtn = `<button class="share-btn" onclick="event.preventDefault();event.stopPropagation(); window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(window.location.origin + '/product.html?id=' + '${escapeHTML(p.id)}'), '_blank')" title="Share on WhatsApp"><i class="fas fa-share-nodes"></i></button>`;
             return `
             <a href="product.html?id=${p.id}" class="product-card">
               <div class="product-img">
                 <img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}" loading="lazy" />
                 ${wishBtn}
+                ${shareBtn}
                 ${offer ? `<span class="badge save">Save ${Math.round(((p.price - p.offer_price)/p.price)*100)}%</span>` : ''}
               </div>
               <div class="product-info">
