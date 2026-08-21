@@ -388,7 +388,7 @@ h1,h2,h3,h4,h5 { font-family: var(--font-display); color: var(--burgundy); lette
 }
 .product-card .badge-pill.gold { background: var(--gold); color: var(--burgundy-dark); }
 .product-card .stock-tag {
-  position: absolute; top: 12px; right: 12px;
+  position: absolute; top: 12px; left: 12px;
   background: rgba(198,40,40,.95); color: #FFF;
   padding: 4px 10px; border-radius: 999px;
   font-size: 10px; font-weight: 700;
