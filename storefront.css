@@ -769,8 +769,6 @@ select.prefix-select {
 }
 
 /* ===================== Phase 4: Gallery, Lightbox, Orders, Loyalty ===================== */
-.img-fade { opacity: 0; transition: opacity .45s ease; }
-.img-fade.loaded { opacity: 1; }
 
 .pd-gallery { position: relative; overflow: hidden; cursor: zoom-in; }
 .pd-gallery img { transition: transform .18s ease-out; will-change: transform; }
@@ -1023,4 +1021,7 @@ html { scroll-behavior: smooth; }
 .social-proof-time { font-size: 10px; color: var(--success); font-weight: 700; }
 .social-proof-close {
   position: absolute; top: 8px; right: 8px; font-size: 14px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px; z-index: 1000;
+}
+
+/* Locked Skeleton Pulse */
 }

@@ -154,8 +154,8 @@ async function loadProducts() {
 function productCardHTML(p) {
   const stock = Number(p.stock || 0);
   const imgHTML = p.image_url
-    ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}" loading="lazy" decoding="async" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'placeholder',innerHTML:'<i class=\\'fas fa-image\\'></i>'}))" />`
-    : `<div class="placeholder"><i class="fas fa-image"></i></div>`;
+    ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src='https://via.placeholder.com/400x400.png?text=Image+Not+Found'; this.style.objectFit='contain';" />`
+    : `<img src="https://via.placeholder.com/400x400.png?text=No+Image" alt="No image" style="width:100%; height:100%; object-fit:contain;" />`;
   const offer = p.offer_price && Number(p.offer_price) > 0 && Number(p.offer_price) < Number(p.price);
   const save = offer ? Math.round(((p.price - p.offer_price) / p.price) * 100) : 0;
   const inWishlist = state.wishlist.some(w => w.product_id === p.id);
@@ -355,10 +355,10 @@ async function renderProductDetail() {
     : '';
   const shareBtnDetail = `<button type="button" class="pd-share-btn" onclick="window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(window.location.origin + '/product.html?id=' + '${escapeHTML(p.id)}'), '_blank')" title="Share on WhatsApp"><i class="fas fa-share-nodes"></i></button>`;
   const imgHTML = mainImg
-    ? `<img id="pd-main-img" src="${escapeHTML(mainImg)}" alt="${escapeHTML(p.name)}" class="img-fade" decoding="async" onload="this.classList.add('loaded')" />
+    ? `<img id="pd-main-img" src="${escapeHTML(mainImg)}" alt="${escapeHTML(p.name)}" style="width:100%; height:100%; object-fit:contain;" onerror="this.onerror=null; this.src='https://via.placeholder.com/600x600.png?text=Image+Not+Found';" />
        <button type="button" class="pd-expand-btn" id="pd-expand" title="View fullscreen" data-testid="pd-expand"><i class="fas fa-expand"></i></button>
        ${shareBtnDetail}`
-    : `<div class="placeholder"><i class="fas fa-image"></i></div>`;
+    : `<img src="https://via.placeholder.com/600x600.png?text=No+Image" style="width:100%; height:100%; object-fit:contain;" />`;
 
   const related = state.products.filter(x => x.category === p.category && x.id !== p.id).slice(0, 4);
   const inWishlist = state.wishlist.some(w => w.product_id === p.id);
@@ -464,9 +464,7 @@ async function renderProductDetail() {
     btn.classList.add('active');
     const main = $('#pd-main-img');
     if (main) {
-      main.classList.remove('loaded');
       main.src = btn.dataset.img;
-      main.onload = () => main.classList.add('loaded');
     }
     state._pdImageIdx = Number(btn.dataset.idx || 0);
   }));
@@ -1850,7 +1848,7 @@ function renderRecentlyViewed() {
             return `
             <a href="product.html?id=${p.id}" class="product-card">
               <div class="product-img">
-                <img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}" loading="lazy" />
+                <img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src='https://via.placeholder.com/400x400.png?text=Image+Not+Found'; this.style.objectFit='contain';" />
                 ${wishBtn}
                 ${shareBtn}
                 ${offer ? `<span class="badge save">Save ${Math.round(((p.price - p.offer_price)/p.price)*100)}%</span>` : ''}
