@@ -329,6 +329,26 @@ h1,h2,h3,h4,h5 { font-family: var(--font-display); color: var(--burgundy); lette
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 24px;
 }
+.product-scroller {
+  display: flex;
+  overflow-x: auto;
+  gap: 20px;
+  padding-bottom: 24px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -5%;
+  padding-inline: 5%;
+}
+.product-scroller::-webkit-scrollbar { height: 6px; }
+.product-scroller::-webkit-scrollbar-track { background: var(--line); border-radius: 4px; margin: 0 5%; }
+.product-scroller::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 4px; }
+.product-scroller .product-card {
+  flex: 0 0 calc(75% - 20px);
+  scroll-snap-align: center;
+}
+@media (min-width: 768px) {
+  .product-scroller .product-card { flex: 0 0 calc(25% - 15px); scroll-snap-align: start; }
+}
 .product-card {
   background: #FFF;
   border: 1px solid var(--line);
@@ -961,4 +981,46 @@ html { scroll-behavior: smooth; }
 /* Image placeholder while lazy-loading (static — no infinite animation, keeps INP healthy) */
 .product-card .thumb, .pd-gallery, .oc-thumb {
   background-image: linear-gradient(135deg, #f4ede2, #fbf6ec 55%, #f4ede2);
+}
+
+/* Social Proof Toast */
+.social-proof-toast {
+  position: fixed;
+  bottom: 80px;
+  left: 20px;
+  background: #FFF;
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(60,20,30,.15);
+  border-radius: 8px;
+  padding: 12px 28px 12px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 999;
+  width: calc(100% - 40px);
+  max-width: 320px;
+  transform: translateY(150%);
+  opacity: 0;
+  transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s;
+  cursor: pointer;
+  text-decoration: none;
+}
+@media (min-width: 768px) { .social-proof-toast { bottom: 24px; left: 24px; } }
+.social-proof-toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+.social-proof-toast img {
+  width: 50px;
+  height: 50px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+.social-proof-info { display: flex; flex-direction: column; gap: 4px; }
+.social-proof-title { font-size: 11px; color: var(--muted); }
+.social-proof-name { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.2; }
+.social-proof-time { font-size: 10px; color: var(--success); font-weight: 700; }
+.social-proof-close {
+  position: absolute; top: 8px; right: 8px; font-size: 14px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px; z-index: 1000;
 }

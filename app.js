@@ -1803,6 +1803,7 @@ async function bootstrap() {
   renderHomeProducts();
   renderHomeCollections();
   renderHeroSlideshow();
+  if (typeof initSocialProofToast === 'function') initSocialProofToast();
   populateCategoryFilter();
   // Apply ?cat= URL param to filter dropdown AFTER options are populated
   const catParam = param('cat');
@@ -2036,3 +2037,52 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 })();
+
+// Social Proof Toast Logic
+let socialProofTimer;
+function initSocialProofToast() {
+  if (window.location.pathname.includes('admin')) return;
+  if (!state.products || !state.products.length) return;
+  
+  let toast = document.getElementById('social-proof-toast');
+  if (!toast) {
+    toast = document.createElement('a');
+    toast.id = 'social-proof-toast';
+    toast.className = 'social-proof-toast';
+    document.body.appendChild(toast);
+  }
+
+  const cities = ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai', 'Pune', 'Ahmedabad'];
+  
+  function showRandomPurchase() {
+    const p = state.products[Math.floor(Math.random() * state.products.length)];
+    const city = cities[Math.floor(Math.random() * cities.length)];
+    const minAgo = Math.floor(Math.random() * 59) + 1;
+    
+    toast.href = 'product.html?id=' + encodeURIComponent(p.id);
+    toast.innerHTML = `
+      <img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}">
+      <div class="social-proof-info">
+        <div class="social-proof-title">Someone in ${city} just bought</div>
+        <div class="social-proof-name">${escapeHTML(p.name)}</div>
+        <div class="social-proof-time">${minAgo} min${minAgo > 1 ? 's' : ''} ago</div>
+      </div>
+      <button class="social-proof-close" onclick="event.preventDefault(); document.getElementById('social-proof-toast').classList.remove('show'); clearTimeout(socialProofTimer);">&times;</button>
+    `;
+    
+    // Add show class to slide it up
+    setTimeout(() => toast.classList.add('show'), 100);
+    
+    // Slide down after 5 seconds
+    socialProofTimer = setTimeout(() => {
+      toast.classList.remove('show');
+      // Schedule next one after 5 seconds
+      setTimeout(showRandomPurchase, 5000);
+    }, 5000);
+  }
+
+  // Start the first one after 5 seconds
+  setTimeout(showRandomPurchase, 5000);
+}
+
+// Call init once data is loaded (around line 1700 where re-renders happen)
