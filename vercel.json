@@ -13,6 +13,8 @@
     { "source": "/api/store/:action", "destination": "/api/store?action=:action" },
     { "source": "/api/coupons/validate", "destination": "/api/store?action=coupon-validate" },
     { "source": "/api/ccavenue/:action", "destination": "/api/ccavenue?action=:action" },
+    { "source": "/api/enquiries", "destination": "/api/enquiries" },
+    { "source": "/api/enquiries/:action", "destination": "/api/enquiries?action=:action" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/search", "destination": "/products.html" },
     { "source": "/about-us", "destination": "/about-us.html" },

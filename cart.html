@@ -14,7 +14,7 @@
   <div class="topbar"><span><i class="fas fa-lock"></i> Secure Checkout</span><span><i class="fas fa-truck-fast"></i> Free Shipping over ₹999</span><span><i class="fas fa-rotate-left"></i> 7-day Returns</span></div>
   <header class="site-header">
     <a class="logo" href="index.html">ONCOST</a>
-    <nav class="desktop-nav"><a href="index.html">Home</a><a href="products.html">Shop</a><a href="bulk.html">Bulk Orders</a><a href="account.html" data-account-link><i class="fas fa-user"></i></a></nav>
+    <nav class="desktop-nav"><a href="index.html">Home</a><a href="#" onclick="openEnquiryModal(); return false;" class="enquiry-nav-btn">Enquiry Now</a><a href="products.html">Shop</a><a href="bulk.html">Bulk Orders</a><a href="account.html" data-account-link><i class="fas fa-user"></i></a></nav>
     <div class="header-actions">
       <a class="icon-btn" href="cart.html" data-cart-count><i class="fas fa-cart-shopping"></i></a>
       <a class="icon-btn" href="account.html" data-account-link><i class="fas fa-user"></i></a>
@@ -41,8 +41,9 @@
     <div class="footer-bottom"><div>© <span id="copy-year"></span> ONCOST.</div><div><a class="admin-link" href="admin-dashboard.html"><i class="fas fa-shield-halved"></i> Admin Console</a></div></div>
   </footer>
 
-  <nav class="mobile-nav"><div class="row">
+  <nav class="mobile-nav"><div class="row" style="grid-template-columns: repeat(6, 1fr);">
     <a href="index.html"><i class="fas fa-house"></i> Home</a>
+    <a href="#" onclick="openEnquiryModal(); return false;"><i class="fas fa-paper-plane"></i> Enquiry</a>
     <a href="products.html"><i class="fas fa-store"></i> Shop</a>
     <a href="bulk.html"><i class="fab fa-whatsapp"></i> Bulk</a>
     <a href="cart.html" data-cart-count class="active"><i class="fas fa-cart-shopping"></i> Cart</a>
