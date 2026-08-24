@@ -2136,6 +2136,17 @@ function initEnquiryModalSystem() {
             </div>
 
             <div class="enquiry-form-group">
+              <label class="field-label" for="enq-lead-type">I am a <span class="req">*</span></label>
+              <select id="enq-lead-type" name="lead_type" class="field" required style="width:100%;padding:10px 14px;border:1px solid var(--line,#e2d9cd);border-radius:8px;font-size:14px;background:#fdfaf5;">
+                <option value="">-- Select Lead Type --</option>
+                <option value="Wholesaler">Wholesaler</option>
+                <option value="Dealer">Dealer</option>
+                <option value="Reseller">Reseller</option>
+                <option value="Customer">Customer</option>
+              </select>
+            </div>
+
+            <div class="enquiry-form-group">
               <label class="field-label">Enquiry Type <span class="req">*</span></label>
               <div class="enquiry-checkbox-container">
                 <label class="enquiry-checkbox-item">
@@ -2202,6 +2213,7 @@ window.handleEnquiryFormSubmit = async function(e) {
   const phoneEl = document.getElementById('enq-phone');
   const emailEl = document.getElementById('enq-email');
   const addressEl = document.getElementById('enq-address');
+  const leadTypeEl = document.getElementById('enq-lead-type');
   
   const checkboxes = document.querySelectorAll('input[name="enquiry_type"]:checked');
   
@@ -2217,6 +2229,7 @@ window.handleEnquiryFormSubmit = async function(e) {
   const phone = (phoneEl ? phoneEl.value : '').trim();
   const email = (emailEl ? emailEl.value : '').trim();
   const address = (addressEl ? addressEl.value : '').trim();
+  const leadType = (leadTypeEl ? leadTypeEl.value : '').trim();
   const selectedTypes = Array.from(checkboxes).map(cb => cb.value);
 
   // Frontend validations
@@ -2242,6 +2255,12 @@ window.handleEnquiryFormSubmit = async function(e) {
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     showError('Please enter a valid email address.');
     if (emailEl) emailEl.focus();
+    return;
+  }
+
+  if (!leadType) {
+    showError('Please select your Lead Type (Wholesaler, Dealer, Reseller, or Customer).');
+    if (leadTypeEl) leadTypeEl.focus();
     return;
   }
 
@@ -2287,6 +2306,7 @@ window.handleEnquiryFormSubmit = async function(e) {
           phone: phone,
           email: email,
           address: address,
+          lead_type: leadType,
           enquiry_type: selectedTypes
         })
       });
@@ -2345,6 +2365,7 @@ window.handleEnquiryFormSubmit = async function(e) {
       phone: phone,
       email: email || '',
       address: address || '',
+      lead_type: leadType,
       enquiry_type: selectedTypes.join(', ')
     };
 

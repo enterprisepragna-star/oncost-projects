@@ -4,6 +4,7 @@ const ExcelJS = require('exceljs');
 
 const EXCEL_FILE_PATH = path.resolve(process.cwd(), 'enquiries.xlsx');
 const VALID_ENQUIRY_TYPES = ['Personal Gifting', 'Bulk Orders', 'Corporate Gifting'];
+const VALID_LEAD_TYPES = ['Wholesaler', 'Dealer', 'Reseller', 'Customer'];
 
 // Simple mutex queue to safely handle concurrent writes
 let fileLock = Promise.resolve();
@@ -52,6 +53,7 @@ async function getOrCreateWorkbook() {
       { header: 'Phone Number', key: 'phone', width: 18 },
       { header: 'Email', key: 'email', width: 25 },
       { header: 'Address', key: 'address', width: 35 },
+      { header: 'Lead Type', key: 'lead_type', width: 20 },
       { header: 'Enquiry Type', key: 'enquiry_type', width: 35 }
     ];
     // Style headers
@@ -99,6 +101,7 @@ async function handlePost(req, res) {
   const phone = String(body.phone || '').trim();
   const email = String(body.email || '').trim();
   const address = String(body.address || '').trim();
+  const leadType = String(body.lead_type || body.leadType || '').trim();
   let enquiryTypes = body.enquiry_type || body.enquiry_types || [];
 
   if (typeof enquiryTypes === 'string') {
@@ -108,15 +111,8 @@ async function handlePost(req, res) {
     enquiryTypes = [];
   }
 
-  // Filter & validate enquiry types against allowed values, fallback to 'Bulk Orders' if empty
+  // Filter & validate enquiry types against allowed values
   let selectedTypes = enquiryTypes.filter(type => VALID_ENQUIRY_TYPES.includes(type));
-  if (selectedTypes.length === 0) {
-    if (enquiryTypes.length > 0) {
-      selectedTypes = [enquiryTypes.join(', ')];
-    } else {
-      selectedTypes = ['Bulk Orders'];
-    }
-  }
 
   // Validation Rules
   if (!name) {
@@ -133,6 +129,18 @@ async function handlePost(req, res) {
 
   if (email && !isValidEmail(email)) {
     return sendJson(res, 400, { success: false, message: 'Please enter a valid email address.' });
+  }
+
+  if (!leadType) {
+    return sendJson(res, 400, { success: false, message: 'Please select a Lead Type (Wholesaler, Dealer, Reseller, or Customer).' });
+  }
+
+  if (!VALID_LEAD_TYPES.includes(leadType)) {
+    return sendJson(res, 400, { success: false, message: 'Invalid Lead Type selected.' });
+  }
+
+  if (selectedTypes.length === 0) {
+    return sendJson(res, 400, { success: false, message: 'Please select at least one enquiry type.' });
   }
 
   // Perform excel write within lock
@@ -170,6 +178,7 @@ async function handlePost(req, res) {
         phone,
         email || '',
         address || '',
+        leadType,
         enquiryTypeStr
       ]);
 

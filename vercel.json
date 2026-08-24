@@ -6,6 +6,8 @@
   "outputDirectory": ".",
   "installCommand": "npm install --omit=dev --no-audit --no-fund",
   "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/index.html", "destination": "/index.html" },
     { "source": "/api/delhivery/:action", "destination": "/api/delhivery?action=:action" },
     { "source": "/api/whatsapp/:action", "destination": "/api/whatsapp?action=:action" },
     { "source": "/api/reviews/:action", "destination": "/api/reviews?action=:action" },
