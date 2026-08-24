@@ -1,37 +1,451 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sign In · ONCOST</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign In · Personal Gifting · ONCOST</title>
   <link rel="stylesheet" href="storefront.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-client.js"></script>
+  <style>
+    /* ================================================================
+       Vibrant Personal Gifting Sign-In Styles
+       ================================================================ */
+    :root {
+      --gifting-pink: #ff4e88;
+      --gifting-purple: #7028e8;
+      --gifting-gold: #ffd700;
+      --gifting-coral: #ff7e5f;
+      --gifting-wine: #5c1527;
+      --gifting-burgundy: #7a1f35;
+    }
+
+    * { box-sizing: border-box; }
+
+    body.gifting-signin-page {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      font-family: var(--font-body, 'Inter', sans-serif);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow-x: hidden;
+      background-color: #3b0a1a;
+    }
+
+    /* Animated Colorful Mesh Background */
+    .gifting-bg-container {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      background: 
+        radial-gradient(circle at 15% 20%, rgba(255, 78, 136, 0.45), transparent 45%),
+        radial-gradient(circle at 85% 15%, rgba(112, 40, 232, 0.45), transparent 50%),
+        radial-gradient(circle at 50% 85%, rgba(255, 126, 95, 0.4), transparent 45%),
+        radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.35), transparent 40%),
+        linear-gradient(135deg, #4a0d1d 0%, #2a0815 40%, #1a0410 100%);
+      background-size: 200% 200%;
+      animation: meshGradientShift 14s ease infinite alternate;
+    }
+
+    @keyframes meshGradientShift {
+      0% { background-position: 0% 0%; }
+      50% { background-position: 100% 100%; }
+      100% { background-position: 0% 100%; }
+    }
+
+    /* High-Resolution Artwork Overlay */
+    .gifting-art-overlay {
+      position: absolute;
+      inset: 0;
+      background-image: url('assets/gifting-bg.png');
+      background-size: cover;
+      background-position: center;
+      opacity: 0.38;
+      mix-blend-mode: overlay;
+      filter: saturate(1.3) contrast(1.1);
+    }
+
+    /* Soft Floating Glowing Orbs */
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(70px);
+      opacity: 0.6;
+      pointer-events: none;
+      animation: floatOrb 18s ease-in-out infinite alternate;
+    }
+    .orb-1 { width: 340px; height: 340px; background: rgba(255, 78, 136, 0.6); top: -80px; left: -60px; }
+    .orb-2 { width: 380px; height: 380px; background: rgba(255, 215, 0, 0.5); bottom: -100px; right: -80px; animation-delay: -5s; }
+    .orb-3 { width: 300px; height: 300px; background: rgba(112, 40, 232, 0.55); top: 50%; right: 10%; animation-delay: -9s; }
+
+    @keyframes floatOrb {
+      0% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(40px, -60px) scale(1.15); }
+      100% { transform: translate(-30px, 50px) scale(0.9); }
+    }
+
+    /* Floating Animated Gifting Particles & Badges */
+    .gifting-float-item {
+      position: absolute;
+      z-index: 1;
+      pointer-events: none;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      animation: floatBadge 8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+    }
+
+    .gifting-tag-1 { top: 12%; left: 8%; animation-delay: 0s; }
+    .gifting-tag-2 { bottom: 15%; left: 7%; animation-delay: -2.5s; }
+    .gifting-tag-3 { top: 18%; right: 7%; animation-delay: -5s; }
+    .gifting-tag-4 { bottom: 12%; right: 8%; animation-delay: -3.5s; }
+
+    @keyframes floatBadge {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-18px) rotate(2deg); }
+    }
+
+    /* Floating 3D Gift Icons */
+    .floating-icon {
+      position: absolute;
+      z-index: 1;
+      font-size: 26px;
+      opacity: 0.85;
+      filter: drop-shadow(0 6px 12px rgba(0,0,0,0.3));
+      animation: floatIcon 6s ease-in-out infinite alternate;
+    }
+    .icon-1 { top: 28%; left: 16%; animation-delay: -1s; }
+    .icon-2 { bottom: 32%; right: 14%; animation-delay: -3s; }
+    .icon-3 { top: 40%; right: 18%; animation-delay: -2s; }
+    .icon-4 { bottom: 25%; left: 20%; animation-delay: -4s; }
+
+    @keyframes floatIcon {
+      0% { transform: translateY(0) scale(1) rotate(0deg); }
+      100% { transform: translateY(-24px) scale(1.15) rotate(12deg); }
+    }
+
+    /* Decorative Corner Silk Ribbons */
+    .ribbon-corner-top {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 180px;
+      height: 180px;
+      overflow: hidden;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .ribbon-corner-top::before {
+      content: "🎀 SPECIAL GIFTS";
+      position: absolute;
+      top: 32px;
+      right: -45px;
+      width: 200px;
+      padding: 7px 0;
+      background: linear-gradient(135deg, #ffd700, #d4af37);
+      color: #3b0a1a;
+      font-weight: 800;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-align: center;
+      transform: rotate(45deg);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+
+    /* Main Container Shell */
+    .signin-wrapper {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 440px;
+      padding: 20px;
+    }
+
+    /* Glassmorphism Sign-In Card */
+    .gifting-card {
+      background: rgba(255, 255, 255, 0.93);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-radius: 24px;
+      padding: 40px 36px;
+      box-shadow: 
+        0 24px 70px rgba(59, 10, 26, 0.45),
+        0 4px 20px rgba(212, 175, 55, 0.25),
+        inset 0 1px 1px rgba(255, 255, 255, 0.9);
+      border: 1.5px solid rgba(255, 215, 0, 0.4);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .gifting-card:hover {
+      box-shadow: 
+        0 30px 80px rgba(59, 10, 26, 0.55),
+        0 6px 30px rgba(212, 175, 55, 0.35),
+        inset 0 1px 1px rgba(255, 255, 255, 1);
+    }
+
+    /* Card Top Shimmer Bar */
+    .card-shimmer-bar {
+      height: 5px;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(90deg, #7a1f35, #ff4e88, #ffd700, #ff7e5f, #7a1f35);
+      background-size: 300% 100%;
+      animation: shimmerFlow 5s linear infinite;
+    }
+
+    @keyframes shimmerFlow {
+      0% { background-position: 0% 0%; }
+      100% { background-position: 300% 0%; }
+    }
+
+    /* Brand Header Styling */
+    .gifting-header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: linear-gradient(135deg, #faf2d8, #f2dd92);
+      color: #7a1f35;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 10px rgba(212, 175, 55, 0.25);
+    }
+
+    .gifting-logo {
+      display: inline-block;
+      font-family: var(--font-display, 'Playfair Display', serif);
+      font-size: 2.1rem;
+      font-weight: 900;
+      letter-spacing: 3px;
+      background: linear-gradient(135deg, #5c1527 0%, #7a1f35 60%, #b15f72 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-decoration: none;
+      margin-bottom: 4px;
+    }
+
+    .gifting-subtitle {
+      font-size: 13px;
+      color: #6a5759;
+      font-weight: 500;
+      margin-bottom: 24px;
+    }
+
+    /* Google Button */
+    .google-gifting-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: #ffffff;
+      border: 1.5px solid #eadfd4;
+      color: #3b2c2e;
+      font-weight: 600;
+      padding: 13px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+
+    .google-gifting-btn:hover {
+      border-color: var(--burgundy, #7a1f35);
+      box-shadow: 0 6px 20px rgba(122, 31, 53, 0.18);
+      transform: translateY(-1px);
+    }
+
+    /* Form Fields */
+    .gifting-field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .gifting-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #5a4b4d;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .gifting-input {
+      width: 100%;
+      padding: 13px 16px;
+      border-radius: 10px;
+      border: 1.5px solid #e5d9cc;
+      background: #fffdf9;
+      font-size: 14px;
+      color: #2b0b14;
+      transition: all 0.25s ease;
+      outline: none;
+    }
+
+    .gifting-input:focus {
+      border-color: #7a1f35;
+      background: #ffffff;
+      box-shadow: 0 0 0 4px rgba(122, 31, 53, 0.12);
+    }
+
+    /* Submit Button */
+    .gifting-submit-btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, #7a1f35 0%, #9e2a47 50%, #7a1f35 100%);
+      background-size: 200% 100%;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 6px 22px rgba(122, 31, 53, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .gifting-submit-btn:hover {
+      background-position: 100% 0%;
+      box-shadow: 0 8px 28px rgba(122, 31, 53, 0.48), 0 0 16px rgba(255, 215, 0, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .gifting-submit-btn:active {
+      transform: translateY(0);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 640px) {
+      .gifting-float-item { display: none; }
+      .floating-icon { opacity: 0.4; }
+      .gifting-card { padding: 30px 22px; border-radius: 20px; }
+    }
+  </style>
 </head>
-<body style="display:flex;min-height:100vh;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--cream),var(--gold-soft));padding:20px;">
-  <div style="max-width:420px;width:100%;background:#FFF;padding:36px;border-radius:14px;box-shadow:var(--shadow-lg);border:1px solid var(--line);">
-    <a href="index.html" style="display:block;text-align:center;font-family:var(--font-display);font-size:1.8rem;font-weight:800;color:var(--burgundy);letter-spacing:3px;margin-bottom:6px;">ONCOST</a>
-    <div style="text-align:center;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--gold);font-weight:700;margin-bottom:24px;">Welcome back</div>
-    <h2 style="text-align:center;font-size:1.6rem;margin-bottom:24px;color:#1a1a1a;">Sign In</h2>
-    <div id="err" style="background:#fbecec;color:var(--error, #c0392b);border:1px solid #e8c1c1;padding:10px;border-radius:6px;font-size:13px;margin-bottom:14px;display:none;"></div>
-    <button type="button" id="google-btn" data-testid="google-signin-btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;border:1.5px solid var(--line, #e2d9cc);color:var(--ink, #2c2c2c);font-weight:600;padding:12px;border-radius:8px;cursor:pointer;font-size:14px;transition:all .2s ease;" onmouseover="this.style.borderColor='var(--burgundy, #7a1f35)';this.style.boxShadow='0 4px 14px rgba(122,31,53,0.15)'" onmouseout="this.style.borderColor='var(--line, #e2d9cc)';this.style.boxShadow='none'">
-      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.5l6.2 5.2C40.9 35.6 44 30.3 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
-      Continue with Google
-    </button>
-    <div style="display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--muted, #888);font-size:10px;letter-spacing:1.5px;"><span style="flex:1;height:1px;background:var(--line, #e2d9cc);"></span>OR SIGN IN WITH EMAIL<span style="flex:1;height:1px;background:var(--line, #e2d9cc);"></span></div>
-    <form id="login-form" style="display:flex;flex-direction:column;gap:14px;">
-      <label style="font-size:12px;font-weight:600;color:var(--ink-soft, #4a4a4a);letter-spacing:1px;text-transform:uppercase;">Email
-        <input class="field" type="email" id="email" required placeholder="you@example.com" style="margin-top:6px;width:100%;" />
-      </label>
-      <label style="font-size:12px;font-weight:600;color:var(--ink-soft, #4a4a4a);letter-spacing:1px;text-transform:uppercase;">Password
-        <input class="field" type="password" id="password" required placeholder="••••••••" style="margin-top:6px;width:100%;" />
-      </label>
-      <button class="btn primary" type="submit" id="btn" style="box-shadow: 0 4px 15px rgba(122,31,53,0.25);"><i class="fas fa-right-to-bracket"></i> Sign In</button>
-    </form>
-    <div style="text-align:center;margin-top:20px;font-size:13px;color:var(--muted, #666);">
-      New here? <a href="signup.html" style="color:var(--burgundy, #7a1f35);font-weight:700;">Create an account</a>
+<body class="gifting-signin-page">
+
+  <!-- Colorful Background Mesh & Artwork Overlay -->
+  <div class="gifting-bg-container">
+    <div class="gifting-art-overlay"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- Decorative Corner Ribbon -->
+  <div class="ribbon-corner-top"></div>
+
+  <!-- Floating Gifting Tags & Badges -->
+  <div class="gifting-float-item gifting-tag-1">
+    <span>🎁</span> Wrapped with Love &amp; Care
+  </div>
+  <div class="gifting-float-item gifting-tag-2">
+    <span>🎀</span> Personal Gifting Suite
+  </div>
+  <div class="gifting-float-item gifting-tag-3">
+    <span>✨</span> Unforgettable Celebrations
+  </div>
+  <div class="gifting-float-item gifting-tag-4">
+    <span>💝</span> Bespoke Luxury Hampers
+  </div>
+
+  <!-- Floating Gift Icons -->
+  <div class="floating-icon icon-1">🎁</div>
+  <div class="floating-icon icon-2">🎀</div>
+  <div class="floating-icon icon-3">✨</div>
+  <div class="floating-icon icon-4">🛍️</div>
+
+  <!-- Sign In Form Container -->
+  <div class="signin-wrapper">
+    <div class="gifting-card">
+      <div class="card-shimmer-bar"></div>
+
+      <div style="text-align: center;">
+        <div class="gifting-header-badge">
+          <i class="fas fa-gift"></i> Personal Gifting
+        </div>
+        <div>
+          <a href="index.html" class="gifting-logo">ONCOST</a>
+        </div>
+        <div class="gifting-subtitle">Sign in to manage your orders &amp; gifting rewards</div>
+      </div>
+
+      <!-- Error Alert Box -->
+      <div id="err" style="background:#fbecec;color:var(--error, #c0392b);border:1px solid #e8c1c1;padding:12px;border-radius:10px;font-size:13px;margin-bottom:18px;display:none;text-align:center;font-weight:500;"></div>
+
+      <!-- Google Sign In -->
+      <button type="button" id="google-btn" data-testid="google-signin-btn" class="google-gifting-btn">
+        <svg width="18" height="18" viewBox="0 0 48 48">
+          <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/>
+          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 8 3l5.7-5.7C34.3 6.1 29.4 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+          <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
+          <path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.5l6.2 5.2C40.9 35.6 44 30.3 44 24c0-1.3-.1-2.6-.4-3.9z"/>
+        </svg>
+        Continue with Google
+      </button>
+
+      <!-- Divider -->
+      <div style="display:flex;align-items:center;gap:12px;margin:22px 0 18px;color:#8a797c;font-size:10px;letter-spacing:1.8px;font-weight:700;">
+        <span style="flex:1;height:1px;background:#eadfd4;"></span>OR SIGN IN WITH EMAIL<span style="flex:1;height:1px;background:#eadfd4;"></span>
+      </div>
+
+      <!-- Email / Password Sign In Form -->
+      <form id="login-form" class="gifting-field-group">
+        <label class="gifting-label">Email Address
+          <input class="gifting-input field" type="email" id="email" required placeholder="you@example.com" />
+        </label>
+        <label class="gifting-label">Password
+          <input class="gifting-input field" type="password" id="password" required placeholder="••••••••" />
+        </label>
+        <button class="gifting-submit-btn btn primary" type="submit" id="btn">
+          <i class="fas fa-right-to-bracket"></i> Sign In to Store
+        </button>
+      </form>
+
+      <!-- Footer Navigation Links -->
+      <div style="text-align:center;margin-top:22px;font-size:13px;color:#6a5759;">
+        New to ONCOST? <a href="signup.html" style="color:var(--burgundy, #7a1f35);font-weight:700;text-decoration:underline;text-underline-offset:3px;">Create an Account</a>
+      </div>
+      <div style="text-align:center;margin-top:14px;font-size:12px;">
+        <a href="index.html" style="color:#8a797c;text-decoration:none;font-weight:500;transition:color 0.2s;" onmouseover="this.style.color='#7a1f35'" onmouseout="this.style.color='#8a797c'">
+          ← Back to ONCOST Store
+        </a>
+      </div>
     </div>
-    <div style="text-align:center;margin-top:14px;font-size:12px;"><a href="index.html" style="color:var(--muted, #777);text-decoration:none;">← Back to store</a></div>
   </div>
 
   <script>
@@ -68,7 +482,7 @@
         email: document.getElementById('email').value.trim().toLowerCase(),
         password: document.getElementById('password').value,
       });
-      if (error) { err.textContent = error.message; err.style.display = 'block'; btn.disabled = false; btn.innerHTML = '<i class="fas fa-right-to-bracket"></i> Sign In'; return; }
+      if (error) { err.textContent = error.message; err.style.display = 'block'; btn.disabled = false; btn.innerHTML = '<i class="fas fa-right-to-bracket"></i> Sign In to Store'; return; }
       location.href = redirect;
     });
   </script>
