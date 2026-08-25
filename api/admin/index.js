@@ -1,10 +1,12 @@
 const leadsHandler = require('./_lib/leads');
 const recoverOrderHandler = require('./_lib/recover-order');
+const fixCategoriesHandler = require('./_lib/fix-categories');
 
 module.exports = async function handler(req, res) {
   const action = req.query.action || '';
   if (action === 'leads') return leadsHandler(req, res);
   if (action === 'recover-order') return recoverOrderHandler(req, res);
+  if (action === 'fix-categories') return fixCategoriesHandler(req, res);
   if (action === 'polish-review') return polishReview(req, res);
   return res.status(404).json({ error: 'Action not found' });
 };

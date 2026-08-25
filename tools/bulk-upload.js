@@ -175,16 +175,17 @@ async function ensureCategories(categoryNames) {
   if (!categoryNames.length) return;
   console.log(`\n📁  Ensuring ${categoryNames.length} categories exist...`);
   const existing = await supabaseFetch('categories?select=name');
-  const existSet = new Set((existing || []).map(c => c.name));
-  const toCreate = categoryNames.filter(n => !existSet.has(n));
+  const existSet = new Set((existing || []).map(c => (c.name || '').trim().replace(/\s+/g, ' ').toLowerCase()));
+  const toCreate = categoryNames.filter(n => !existSet.has((n || '').trim().replace(/\s+/g, ' ').toLowerCase()));
   if (!toCreate.length) { console.log('   All categories already exist.'); return; }
   for (const name of toCreate) {
-    if (DRY_RUN) { console.log(`   [dry-run] Would create category: ${name}`); continue; }
+    const cleanName = name.trim().replace(/\s+/g, ' ');
+    if (DRY_RUN) { console.log(`   [dry-run] Would create category: ${cleanName}`); continue; }
     await supabaseFetch('categories', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name: cleanName }),
     });
-    console.log(`   ✅ Created category: ${name}`);
+    console.log(`   ✅ Created category: ${cleanName}`);
   }
 }
 

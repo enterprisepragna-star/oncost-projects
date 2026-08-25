@@ -198,7 +198,8 @@ function renderHomeCollections() {
   const fallbackImgs = ['bg-maroon','bg-gold','bg-rose','bg-sage','bg-silver','bg-cream'];
   if (!cats.length) { slot.innerHTML = ''; return; }
   slot.innerHTML = cats.map((c, i) => {
-    const productsInCat = state.products.filter(p => (p.category||'') === c.name);
+    const normCat = (c.name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const productsInCat = state.products.filter(p => (p.category||'').trim().replace(/\s+/g, ' ').toLowerCase() === normCat);
     // Image priority: 1) category's own image_url  2) first product image in this category  3) gradient fallback
     let img = c.image_url;
     if (!img) {
@@ -1173,10 +1174,28 @@ function applyContentUX() {
 }
 
 // ---------- Categories ----------
+function dedupeCategories(rawCats) {
+  if (!Array.isArray(rawCats)) return [];
+  const map = new Map();
+  for (const c of rawCats) {
+    if (!c || !c.name) continue;
+    const norm = c.name.trim().replace(/\s+/g, ' ').toLowerCase();
+    if (!map.has(norm)) {
+      map.set(norm, { ...c, name: c.name.trim().replace(/\s+/g, ' ') });
+    } else {
+      const existing = map.get(norm);
+      if (c.name === 'Brass Collection' || (!existing.description && c.description) || (!existing.image_url && c.image_url)) {
+        map.set(norm, { ...existing, ...c, name: c.name === 'Brass Collection' ? 'Brass Collection' : existing.name });
+      }
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 async function loadCategories() {
   try {
     const { data } = await supabaseClient.from('categories').select('*').order('name', { ascending: true });
-    state.categories = data || [];
+    state.categories = dedupeCategories(data || []);
   } catch { state.categories = []; }
 }
 
