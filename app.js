@@ -1,3 +1,8 @@
+function generateSKU(name) {
+  if (!name) return "";
+  return name.split(/[\s-]+/).filter(w => w.length > 0).map(word => word[0]).join("").toUpperCase();
+}
+
 /* =================================================================
    ONCOST Storefront · app.js (Unified)
    Live data from Supabase: products, categories, sale_events,
@@ -2071,16 +2076,16 @@ function initSocialProofToast() {
     // Add show class to slide it up
     setTimeout(() => toast.classList.add('show'), 100);
     
-    // Slide down after 5 seconds
+    // Slide down after 10 seconds
     socialProofTimer = setTimeout(() => {
       toast.classList.remove('show');
-      // Schedule next one after 5 seconds
-      setTimeout(showRandomPurchase, 5000);
-    }, 5000);
+      // Schedule next one after 10 seconds
+      setTimeout(showRandomPurchase, 10000);
+    }, 10000);
   }
 
-  // Start the first one after 5 seconds
-  setTimeout(showRandomPurchase, 5000);
+  // Start the first one after 10 seconds
+  setTimeout(showRandomPurchase, 10000);
 }
 
 // Call init once data is loaded (around line 1700 where re-renders happen)

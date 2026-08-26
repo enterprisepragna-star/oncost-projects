@@ -1,3 +1,8 @@
+function generateSKU(name) {
+  if (!name) return "";
+  return name.split(/[\s-]+/).filter(w => w.length > 0).map(word => word[0]).join("").toUpperCase();
+}
+
 /* 
    ONCOST Admin Console · admin.js
    Vanilla JS · Supabase JS v2 · Single-file SPA
