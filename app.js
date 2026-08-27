@@ -312,7 +312,20 @@ async function renderProductDetail() {
   const slot = $('[data-product-detail]');
   if (!slot) return;
   const id = param('id');
-  const p = state.products.find(x => x.id === id);
+  let p = state.products.find(x => String(x.id).trim().toLowerCase() === String(id).trim().toLowerCase());
+  
+  if (!p && id) {
+    try {
+      const { data } = await supabaseClient.from('products').select('*').ilike('id', id.trim()).single();
+      if (data) {
+        p = data;
+        state.products.push(p);
+      }
+    } catch (e) {
+      console.error("Direct product fetch failed", e);
+    }
+  }
+
   if (!p) {
     slot.innerHTML = `<div class="empty-state"><i class="fas fa-box-open"></i><h3>Product not found</h3><p>This item may have been removed.</p><a class="btn primary" href="products.html">Browse All</a></div>`;
     return;
@@ -419,7 +432,7 @@ async function renderProductDetail() {
           <span style="font-weight:600;font-size:13px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Quantity</span>
           <div class="qty-stepper">
             <button onclick="changeQty(-1)" aria-label="Decrease" data-testid="pd-qty-minus"><i class="fas fa-minus"></i></button>
-            <input id="pd-qty" type="number" min="1" max="${stock || 999}" value="1" data-testid="pd-qty" />
+            <input id="pd-qty" type="number" min="${p.moq || 1}" max="${stock || 999}" value="${p.moq || 1}" data-testid="pd-qty" />
             <button onclick="changeQty(1)" aria-label="Increase" data-testid="pd-qty-plus"><i class="fas fa-plus"></i></button>
           </div>
           ${stock <= 5 && stock > 0 ? `<span style="font-size:12px;color:var(--error);font-weight:600;">Only ${stock} left</span>` : ''}
@@ -603,6 +616,7 @@ function saveGuestCart() {
 async function addToCart(productId, qty = 1, variant = null) {
   const product = state.products.find(p => p.id === productId);
   if (!product) return toast('Product not available', 'err');
+  qty = Math.max(qty, product.moq || 1);
   const variantId = variant?.id || null;
   const variantLabel = variant?.variant_label || null;
   const unitPrice = variant
@@ -641,9 +655,10 @@ async function addToCart(productId, qty = 1, variant = null) {
   updateCartBadge();
 }
 async function updateCartQty(rowId, qty) {
-  qty = Math.max(1, parseInt(qty, 10) || 1);
   const it = state.cart.find(x => x.id === rowId);
   if (!it) return;
+  const moq = it.product?.moq || 1;
+  qty = Math.max(moq, parseInt(qty, 10) || moq);
   if (state.user && !String(rowId).startsWith('g-')) {
     const { error } = await supabaseClient.from('cart_items').update({ qty }).eq('id', rowId);
     if (error) { toast('Could not update quantity: ' + error.message, 'err'); return; }
@@ -730,7 +745,7 @@ function renderCart() {
             <div class="meta"><h4>${escapeHTML(p.name)}${it.variant_label?` <span style="font-weight:400;font-size:12px;color:var(--burgundy);background:var(--gold-soft);padding:2px 8px;border-radius:999px;margin-left:4px;">${escapeHTML(it.variant_label)}</span>`:''}</h4><div class="c">${escapeHTML(p.category||'')} · ${fmtINR(eff)} each</div></div>
             <div class="qty-stepper">
               <button onclick="updateCartQty('${escapeHTML(it.id)}', ${it.qty - 1})"><i class="fas fa-minus"></i></button>
-              <input value="${it.qty}" onchange="updateCartQty('${escapeHTML(it.id)}', this.value)" type="number" min="1" />
+              <input value="${it.qty}" onchange="updateCartQty('${escapeHTML(it.id)}', this.value)" type="number" min="${p.moq || 1}" />
               <button onclick="updateCartQty('${escapeHTML(it.id)}', ${it.qty + 1})"><i class="fas fa-plus"></i></button>
             </div>
             <div class="line-total">${fmtINR(eff * it.qty)}</div>
