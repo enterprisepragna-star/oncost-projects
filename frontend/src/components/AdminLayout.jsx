@@ -131,7 +131,7 @@ export default function AdminLayout({ children }) {
             Public catalog ↗
           </a>
         </div>
-        <div className="p-5 lg:p-8 max-w-[1400px] mx-auto animate-fade-up">{children}</div>
+        <div className="p-5 lg:p-8 max-w-[1400px] mx-auto ">{children}</div>
       </main>
     </div>
   );

@@ -239,14 +239,14 @@ export default function ProductsPage() {
             data-testid="add-product-btn"
             className="text-xs px-3 py-1.5 bg-[#FF3B30] hover:bg-[#cc2f26] text-white flex items-center gap-1.5"
           >
-            <Plus size={12} /> + Add Product
+            <Plus size={12} /> Add Product
           </button>
           <button
             onClick={() => setShowImport(true)}
             data-testid="open-import-pdf"
             className="text-xs px-3 py-1.5 bg-[#002FA7] hover:bg-[#002277] text-white flex items-center gap-1.5"
           >
-            <FileUp size={12} /> + Import from PDF
+            <FileUp size={12} /> Import from PDF
           </button>
           {categories.length > 0 && (
             <select

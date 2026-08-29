@@ -101,7 +101,7 @@ export default function ImportPdfModal({ onClose, onDone }) {
                 <p className="mt-3 font-display text-lg">Drop a PDF here, or click to choose</p>
                 <p className="text-xs text-zinc-500 mt-2">Each product is auto-parsed: code, items, price, MOQ, image. You'll review before saving.</p></>
               )}
-              <input
+              <input onClick={(e) => e.stopPropagation()}
                 ref={fileRef} type="file" accept="application/pdf" className="hidden"
                 data-testid="import-file"
                 onChange={(e) => onExtract(e.target.files?.[0])}
@@ -128,7 +128,7 @@ export default function ImportPdfModal({ onClose, onDone }) {
               {!vendorId && (
                 <div>
                   <p className="overline text-[10px]">New vendor name</p>
-                  <input
+                  <input onClick={(e) => e.stopPropagation()}
                     data-testid="import-new-vendor"
                     value={newVendorName}
                     onChange={(e) => setNewVendorName(e.target.value)}
@@ -139,7 +139,7 @@ export default function ImportPdfModal({ onClose, onDone }) {
               )}
               <div>
                 <p className="overline text-[10px]">Code prefix (optional)</p>
-                <input
+                <input onClick={(e) => e.stopPropagation()}
                   data-testid="import-prefix"
                   value={codePrefix}
                   onChange={(e) => setCodePrefix(e.target.value)}
@@ -151,14 +151,14 @@ export default function ImportPdfModal({ onClose, onDone }) {
 
             <div className="border border-zinc-200 bg-zinc-50 p-3">
               <label className="text-sm font-medium flex items-center gap-2">
-                <input type="checkbox" checked={useCustomRule} onChange={(e) => setUseCustomRule(e.target.checked)} data-testid="import-use-rule" />
+                <input onClick={(e) => e.stopPropagation()} type="checkbox" checked={useCustomRule} onChange={(e) => setUseCustomRule(e.target.checked)} data-testid="import-use-rule" />
                 Apply a custom pricing rule for this batch
               </label>
               {useCustomRule && (
                 <div className="grid grid-cols-3 gap-3 mt-3">
-                  <input type="number" value={rule.threshold} onChange={(e) => setRule(r => ({ ...r, threshold: e.target.value }))} placeholder="Threshold (₹)" className="px-2 py-1.5 border border-zinc-300 text-sm" />
-                  <input type="number" value={rule.below_increment} onChange={(e) => setRule(r => ({ ...r, below_increment: e.target.value }))} placeholder="Add below threshold" className="px-2 py-1.5 border border-zinc-300 text-sm" />
-                  <input type="number" value={rule.at_or_above_increment} onChange={(e) => setRule(r => ({ ...r, at_or_above_increment: e.target.value }))} placeholder="Add at/above threshold" className="px-2 py-1.5 border border-zinc-300 text-sm" />
+                  <input onClick={(e) => e.stopPropagation()} type="number" value={rule.threshold} onChange={(e) => setRule(r => ({ ...r, threshold: e.target.value }))} placeholder="Threshold (₹)" className="px-2 py-1.5 border border-zinc-300 text-sm" />
+                  <input onClick={(e) => e.stopPropagation()} type="number" value={rule.below_increment} onChange={(e) => setRule(r => ({ ...r, below_increment: e.target.value }))} placeholder="Add below threshold" className="px-2 py-1.5 border border-zinc-300 text-sm" />
+                  <input onClick={(e) => e.stopPropagation()} type="number" value={rule.at_or_above_increment} onChange={(e) => setRule(r => ({ ...r, at_or_above_increment: e.target.value }))} placeholder="Add at/above threshold" className="px-2 py-1.5 border border-zinc-300 text-sm" />
                 </div>
               )}
             </div>
@@ -185,11 +185,11 @@ export default function ImportPdfModal({ onClose, onDone }) {
                     {products.map((p, i) => (
                       <tr key={i} className="border-b border-zinc-200">
                         <td className="p-2 w-16">{p.image && <img src={imageUrl(p.image)} alt="" className="w-12 h-12 object-contain bg-white border border-zinc-200" />}</td>
-                        <td className="p-2 w-28"><input value={p.code} onChange={(e) => updateRow(i, "code", e.target.value)} className="w-full px-1.5 py-1 border border-zinc-300 font-mono text-xs" /></td>
-                        <td className="p-2 w-24"><input value={p.set_type || ""} onChange={(e) => updateRow(i, "set_type", e.target.value)} className="w-full px-1.5 py-1 border border-zinc-300 text-xs" /></td>
-                        <td className="p-2"><input value={p.items || ""} onChange={(e) => updateRow(i, "items", e.target.value)} className="w-full px-1.5 py-1 border border-zinc-300 text-xs" /></td>
-                        <td className="p-2 w-16"><input type="number" value={p.moq || 50} onChange={(e) => updateRow(i, "moq", e.target.value)} className="w-full px-1.5 py-1 border border-zinc-300 font-mono text-xs text-right" /></td>
-                        <td className="p-2 w-20"><input type="number" value={p.sg_price || 0} onChange={(e) => updateRow(i, "sg_price", e.target.value)} className="w-full px-1.5 py-1 border border-zinc-300 font-mono text-xs text-right" /></td>
+                        <td className="p-2 w-28"><input onClick={(e) => e.stopPropagation()} value={p.code} onChange={(e) => updateRow(i, "code", e.target.value)} className="w-full px-1.5 py-1 border border-zinc-300 font-mono text-xs" /></td>
+                        <td className="p-2 w-24"><input onClick={(e) => e.stopPropagation()} value={p.set_type || ""} onChange={(e) => updateRow(i, "set_type", e.target.value)} className="w-full px-1.5 py-1 border border-zinc-300 text-xs" /></td>
+                        <td className="p-2"><input onClick={(e) => e.stopPropagation()} value={p.items || ""} onChange={(e) => updateRow(i, "items", e.target.value)} className="w-full px-1.5 py-1 border border-zinc-300 text-xs" /></td>
+                        <td className="p-2 w-16"><input onClick={(e) => e.stopPropagation()} type="number" value={p.moq || 50} onChange={(e) => updateRow(i, "moq", e.target.value)} className="w-full px-1.5 py-1 border border-zinc-300 font-mono text-xs text-right" /></td>
+                        <td className="p-2 w-20"><input onClick={(e) => e.stopPropagation()} type="number" value={p.sg_price || 0} onChange={(e) => updateRow(i, "sg_price", e.target.value)} className="w-full px-1.5 py-1 border border-zinc-300 font-mono text-xs text-right" /></td>
                         <td className="p-2 w-8"><button onClick={() => removeRow(i)} className="text-zinc-400 hover:text-red-600"><Trash2 size={12} /></button></td>
                       </tr>
                     ))}
