@@ -9,9 +9,11 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-client.js"></script>
-  <!-- Excel/CSV parsing -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- PDF / Docx parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
   <!-- Barcode generation -->
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
   <!-- Chart.js for Analytics -->
@@ -258,7 +260,7 @@
               <div class="big-icon"><i class="fas fa-cloud-arrow-up"></i></div>
               <div style="font-weight:600;margin-bottom:4px" id="import-droptext">Drop file here or click to browse</div>
               <div style="font-size:12px;color:var(--admin-text-mute)" id="import-dropsub">Mapping: NAME, SKU, SHORTCODE→Category, PRICE, SALE PRICE, ON HAND→Stock, IMAGE URL, STATUS, DESCRIPTION</div>
-              <input type="file" id="import-file" accept=".csv,.xlsx,.xls" hidden data-testid="import-file" />
+              <input type="file" id="import-file" accept=".csv,.xlsx,.xls,.pdf,.docx,.txt" hidden data-testid="import-file" />
             </div>
 
             <div style="display:flex;gap:8px;margin-top:14px;">

@@ -1589,9 +1589,51 @@ function onImportFile(f) {
 }
 
 function parseImportFile() {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     if (!importFile) return reject(new Error('No file'));
     const name = importFile.name.toLowerCase();
+    
+    // AI Document Extraction (PDF, DOCX, TXT)
+    if (name.endsWith('.pdf') || name.endsWith('.docx') || name.endsWith('.txt')) {
+      try {
+        $('import-dropsub').innerHTML = '<span class="spin"></span> Extracting data with AI... This might take a minute.';
+        let text = '';
+        const arrayBuffer = await importFile.arrayBuffer();
+
+        if (name.endsWith('.pdf')) {
+          const pdfjsLib = window.pdfjsLib;
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          for (let i = 1; i <= Math.min(pdf.numPages, 10); i++) { // limit to 10 pages for safety
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            text += content.items.map(s => s.str).join(' ') + '\n';
+          }
+        } else if (name.endsWith('.docx')) {
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          text = result.value;
+        } else if (name.endsWith('.txt')) {
+          text = await importFile.text();
+        }
+
+        const session = state.user ? (await supabaseClient.auth.getSession()).data.session : null;
+        const res = await fetch('/api/admin?action=ai-parse-products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+        $('import-dropsub').textContent = 'AI extraction complete. Ready to preview.';
+        if (!res.ok) throw new Error(data.error || 'AI parsing failed');
+        if (!data.products || data.products.length === 0) throw new Error('AI could not find any products in the document.');
+        resolve(data.products);
+      } catch (err) {
+        $('import-dropsub').textContent = 'AI Extraction Failed';
+        reject(err);
+      }
+      return;
+    }
+
     if (name.endsWith('.csv')) {
       Papa.parse(importFile, {
         header: true, skipEmptyLines: true,
@@ -1624,10 +1666,10 @@ function parseImportFile() {
 function mapRow(r) {
   const status = (r.STATUS || 'ACTIVE').toString().trim().toUpperCase();
   const statusUI = status === 'ACTIVE' ? 'Active' : status === 'INACTIVE' ? 'Inactive' : status === 'DRAFT' ? 'Draft' : 'Active';
-  const name = (r.NAME || '').toString().trim();
+  const name = (r.NAME || r['PRODUCT NAME'] || r.TITLE || '').toString().trim();
   return {
     name,
-    sku: (r.SKU || '').toString().trim() || null,
+    sku: (r.SKU || r['ITEM NUMBER'] || '').toString().trim() || null,
     barcode: (r.BARCODE || r.EAN || r.UPC || '').toString().trim() || null,
     weight_grams: r.WEIGHT_G || r.WEIGHT || r['WEIGHT (G)'] ? Math.round(Number(r.WEIGHT_G || r.WEIGHT || r['WEIGHT (G)'])) || null : null,
     length_cm:  r.LENGTH  || r['LENGTH (CM)']  ? Number(r.LENGTH  || r['LENGTH (CM)'])  || null : null,
@@ -1635,14 +1677,14 @@ function mapRow(r) {
     height_cm:  r.HEIGHT  || r['HEIGHT (CM)']  ? Number(r.HEIGHT  || r['HEIGHT (CM)'])  || null : null,
     hsn_code:   (r.HSN || r['HSN CODE'] || '').toString().trim() || null,
     gst_percent: r.GST || r['GST %'] || r['GST PERCENT'] ? Number(r.GST || r['GST %'] || r['GST PERCENT']) || 0 : 0,
-    category: (r.SHORTCODE || r.CATEGORY || '').toString().trim() || null,
+    category: (r.SHORTCODE || r.CATEGORY || r['PRODUCT CATEGORY'] || '').toString().trim() || null,
     badge: (r.BADGE || '').toString().trim() || null,
-    description: (r.DESCRIPTION || '').toString().trim() || null,
-    price: Number(String(r.PRICE || '').replace(/,/g,'')) || 0,
-    offer_price: Number(String(r['SALE PRICE'] || '').replace(/,/g,'')) || null,
-    stock: parseInt(String(r['ON HAND'] || r.AVAILABLE || '').replace(/,/g,''), 10) || 0,
+    description: (r.DESCRIPTION || r['LONG DESCRIPTION'] || '').toString().trim() || null,
+    price: Number(String(r.PRICE || r['REGULAR PRICE'] || '').replace(/,/g,'')) || 0,
+    offer_price: Number(String(r['SALE PRICE'] || r['OFFER PRICE'] || '').replace(/,/g,'')) || null,
+    stock: parseInt(String(r['ON HAND'] || r.AVAILABLE || r.STOCK || r.QUANTITY || '').replace(/,/g,''), 10) || 0,
     status: statusUI,
-    image_url: (r['IMAGE URL'] || '').toString().trim() || null,
+    image_url: (r['IMAGE URL'] || r.IMAGE || '').toString().trim() || null,
     seo_title: null, seo_description: null,
   };
 }
@@ -1673,6 +1715,10 @@ async function doImportCommit() {
     $('import-commit-btn').innerHTML = '<span class="spin"></span> Importing…';
     if (!importRows) importRows = await parseImportFile();
     const mapped = importRows.map(mapRow).filter(r => r.name);
+    
+    if (mapped.length === 0) {
+      throw new Error("No valid products found. Ensure your file has a 'NAME' or 'PRODUCT NAME' column.");
+    }
 
     // Auto-create missing categories
     const existingCatNames = new Set(state.categories.map(c => c.name));
@@ -1686,6 +1732,7 @@ async function doImportCommit() {
 
     // Upsert products in batches of 50 (PK by id - we generate slug-based id)
     let created = 0, updated = 0, skipped = 0;
+    let lastError = null;
     const seen = new Set(state.products.map(p => p.id));
     // build payload with stable ids
     const idCount = {};
@@ -1706,6 +1753,7 @@ async function doImportCommit() {
       const { error } = await supabaseClient.from('products').upsert(slice, { onConflict: 'id' });
       if (error) {
         skipped += slice.length;
+        lastError = error.message;
         console.error('Upsert error:', error);
       }
     }
@@ -1715,7 +1763,7 @@ async function doImportCommit() {
     renderCategories();
     renderDashboard();
 
-    $('import-result').innerHTML = `
+    let resultHtml = `
       <div style="background:#E8F4E9;border:1px solid #C2DFC4;color:var(--admin-success);padding:12px 14px;border-radius:6px;display:flex;gap:10px;align-items:center;">
         <i class="fas fa-circle-check" style="font-size:18px"></i>
         <div>
@@ -1723,6 +1771,12 @@ async function doImportCommit() {
           <div style="font-size:12px;">Created: <b>${created - updated < 0 ? 0 : created - updated}</b> · Updated: <b>${updated}</b> · Skipped: <b>${skipped}</b> · New categories: <b>${catsCreated}</b></div>
         </div>
       </div>`;
+      
+    if (skipped > 0 && lastError) {
+       resultHtml += `<div style="margin-top:8px;background:#FBECEC;border:1px solid #E8C1C1;color:var(--admin-error);padding:12px 14px;border-radius:6px;font-size:13px;"><b>Error in batch:</b> ${escapeHTML(lastError)}</div>`;
+    }
+
+    $('import-result').innerHTML = resultHtml;
     showToast('Import complete.');
   } catch (e) {
     showToast('Import failed: ' + e.message, 'error');
