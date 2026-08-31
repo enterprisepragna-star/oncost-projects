@@ -2,19 +2,44 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Customer Support · ONCOST</title>
+  <title>Customer Support · Personal Gifting · ONCOST</title>
   <link rel="stylesheet" href="storefront.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-client.js"></script>
   <script src="seo.js" defer></script>
+  <style>
+    body { position: relative; overflow-x: hidden; background-color: #3b0a1a; min-height: 100vh; }
+    .gifting-bg-container {
+      position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+      background: radial-gradient(circle at 15% 20%, rgba(255, 78, 136, 0.38), transparent 45%), radial-gradient(circle at 85% 15%, rgba(112, 40, 232, 0.38), transparent 50%), linear-gradient(135deg, #3b0a1a 0%, #21050e 50%, #150309 100%);
+      background-size: 200% 200%; animation: meshShift 16s ease infinite alternate;
+    }
+    @keyframes meshShift { 0% { background-position: 0% 0%; } 100% { background-position: 100% 100%; } }
+    .gifting-art-overlay { position: absolute; inset: 0; background-image: url('assets/gifting-bg.png'); background-size: cover; opacity: 0.28; mix-blend-mode: overlay; }
+    main { position: relative; z-index: 2; }
+    .page-hero, .section {
+      background: rgba(255, 255, 255, 0.94) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border-radius: 24px !important;
+      border: 1.5px solid rgba(255, 215, 0, 0.35) !important;
+      box-shadow: 0 20px 60px rgba(59, 10, 26, 0.35) !important;
+      margin: 24px auto 36px !important;
+      max-width: 1100px !important;
+    }
+    .site-footer { position: relative; z-index: 2; background: rgba(25, 4, 10, 0.95) !important; }
+  </style>
 </head>
 <body>
+  <div class="gifting-bg-container">
+    <div class="gifting-art-overlay"></div>
+  </div>
   <div id="sale-banner" class="sale-banner"></div>
   <div class="topbar"><span><i class="fas fa-headset"></i> We're here to help</span></div>
   <header class="site-header">
     <a class="logo" href="index.html">ONCOST</a>
-    <nav class="desktop-nav"><a href="index.html">Home</a><a href="products.html">Shop</a><a href="bulk.html">Bulk</a><a href="account.html"><i class="fas fa-user"></i></a></nav>
+    <nav class="desktop-nav"><a href="index.html">Home</a><a href="#" onclick="openEnquiryModal(); return false;" class="enquiry-nav-btn">Enquiry Now</a><a href="products.html">Shop</a><a href="bulk.html">Bulk</a><a href="account.html"><i class="fas fa-user"></i></a></nav>
     <div class="header-actions">
       <a class="icon-btn" href="cart.html"><i class="fas fa-cart-shopping"></i></a>
       <a class="icon-btn" href="account.html"><i class="fas fa-user"></i></a>

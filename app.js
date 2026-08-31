@@ -203,7 +203,8 @@ function renderHomeCollections() {
   const fallbackImgs = ['bg-maroon','bg-gold','bg-rose','bg-sage','bg-silver','bg-cream'];
   if (!cats.length) { slot.innerHTML = ''; return; }
   slot.innerHTML = cats.map((c, i) => {
-    const productsInCat = state.products.filter(p => (p.category||'') === c.name);
+    const normCat = (c.name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const productsInCat = state.products.filter(p => (p.category||'').trim().replace(/\s+/g, ' ').toLowerCase() === normCat);
     // Image priority: 1) category's own image_url  2) first product image in this category  3) gradient fallback
     let img = c.image_url;
     if (!img) {
@@ -1193,10 +1194,28 @@ function applyContentUX() {
 }
 
 // ---------- Categories ----------
+function dedupeCategories(rawCats) {
+  if (!Array.isArray(rawCats)) return [];
+  const map = new Map();
+  for (const c of rawCats) {
+    if (!c || !c.name) continue;
+    const norm = c.name.trim().replace(/\s+/g, ' ').toLowerCase();
+    if (!map.has(norm)) {
+      map.set(norm, { ...c, name: c.name.trim().replace(/\s+/g, ' ') });
+    } else {
+      const existing = map.get(norm);
+      if (c.name === 'Brass Collection' || (!existing.description && c.description) || (!existing.image_url && c.image_url)) {
+        map.set(norm, { ...existing, ...c, name: c.name === 'Brass Collection' ? 'Brass Collection' : existing.name });
+      }
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 async function loadCategories() {
   try {
     const { data } = await supabaseClient.from('categories').select('*').order('name', { ascending: true });
-    state.categories = data || [];
+    state.categories = dedupeCategories(data || []);
   } catch { state.categories = []; }
 }
 
@@ -1641,7 +1660,24 @@ function setupEnquiryForm() {
     };
     const summary = `Name: ${data.name} | Email: ${data.email} | Phone: ${data.phone} | GSTIN: ${data.gstin||'—'} | Event: ${data.event} | Qty: ${data.qty} | Date: ${data.date||'—'} | Budget: ${data.budget||'—'} | Message: ${data.message||'—'}`;
     try {
-      // Delegate both insertion (via service role to bypass RLS) and email sending to the secure backend endpoint
+      // 1. Submit to Excel API (/api/enquiries)
+      try {
+        await fetch('/api/enquiries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: data.name,
+            phone: data.phone,
+            email: data.email,
+            address: data.message || '',
+            enquiry_type: [data.event === 'Corporate' ? 'Corporate Gifting' : 'Bulk Orders']
+          })
+        });
+      } catch (excelErr) {
+        console.error('Excel submission failed from form submit handler:', excelErr);
+      }
+
+      // 2. Delegate both insertion (via service role to bypass RLS) and email sending to the secure backend endpoint
       const r = await fetch('/api/email/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2103,4 +2139,309 @@ function initSocialProofToast() {
   setTimeout(showRandomPurchase, 10000);
 }
 
-// Call init once data is loaded (around line 1700 where re-renders happen)
+// ---------- ENQUIRY SYSTEM MODAL & HANDLERS ----------
+function initEnquiryModalSystem() {
+  if (document.getElementById('enquiry-modal-overlay')) return;
+
+  const modalHtml = `
+    <div id="enquiry-modal-overlay" class="enquiry-modal-overlay" onclick="if(event.target===this) closeEnquiryModal();">
+      <div class="enquiry-modal-card" role="dialog" aria-modal="true">
+        <div class="enquiry-modal-header">
+          <h3><i class="fas fa-paper-plane"></i> Submit Enquiry</h3>
+          <button type="button" class="enquiry-modal-close" onclick="closeEnquiryModal();" aria-label="Close">&times;</button>
+        </div>
+        <div class="enquiry-modal-body">
+          <div id="enquiry-alert" class="enquiry-alert" style="display:none;"></div>
+          
+          <form id="enquiry-system-form" onsubmit="handleEnquiryFormSubmit(event);" novalidate>
+            <div class="enquiry-form-group">
+              <label class="field-label" for="enq-name">Name <span class="req">*</span></label>
+              <input type="text" id="enq-name" name="name" class="field" placeholder="Enter your full name" required />
+            </div>
+
+            <div class="enquiry-form-group">
+              <label class="field-label" for="enq-phone">Phone Number <span class="req">*</span></label>
+              <input type="tel" id="enq-phone" name="phone" class="field" placeholder="e.g. 9876543210 or +91 9876543210" required />
+            </div>
+
+            <div class="enquiry-form-group">
+              <label class="field-label" for="enq-email">Email <span style="font-weight:normal;color:#777;">(Optional)</span></label>
+              <input type="email" id="enq-email" name="email" class="field" placeholder="Enter your email address" />
+            </div>
+
+            <div class="enquiry-form-group">
+              <label class="field-label" for="enq-address">Address <span style="font-weight:normal;color:#777;">(Optional)</span></label>
+              <textarea id="enq-address" name="address" class="field" rows="3" placeholder="Enter city, state or address details"></textarea>
+            </div>
+
+            <div class="enquiry-form-group">
+              <label class="field-label" for="enq-lead-type">I am a <span class="req">*</span></label>
+              <select id="enq-lead-type" name="lead_type" class="field" required style="width:100%;padding:10px 14px;border:1px solid var(--line,#e2d9cd);border-radius:8px;font-size:14px;background:#fdfaf5;">
+                <option value="">-- Select Lead Type --</option>
+                <option value="Wholesaler">Wholesaler</option>
+                <option value="Dealer">Dealer</option>
+                <option value="Reseller">Reseller</option>
+                <option value="Customer">Customer</option>
+              </select>
+            </div>
+
+            <div class="enquiry-form-group">
+              <label class="field-label">Enquiry Type <span class="req">*</span></label>
+              <div class="enquiry-checkbox-container">
+                <label class="enquiry-checkbox-item">
+                  <input type="checkbox" name="enquiry_type" value="Personal Gifting" />
+                  <span>Personal Gifting</span>
+                </label>
+                <label class="enquiry-checkbox-item">
+                  <input type="checkbox" name="enquiry_type" value="Bulk Orders" />
+                  <span>Bulk Orders</span>
+                </label>
+                <label class="enquiry-checkbox-item">
+                  <input type="checkbox" name="enquiry_type" value="Corporate Gifting" />
+                  <span>Corporate Gifting</span>
+                </label>
+              </div>
+            </div>
+
+            <button type="submit" id="enq-submit-btn" class="enquiry-submit-btn">
+              <i class="fas fa-paper-plane"></i> Submit Enquiry
+            </button>
+          </form>
+
+          <div id="enquiry-success-container" class="enquiry-success-view" style="display:none;">
+            <div class="enquiry-success-icon"><i class="fas fa-check"></i></div>
+            <h3 style="color:var(--burgundy, #7a1f35);margin:0 0 8px;">Submission Received!</h3>
+            <p style="color:var(--ink-soft, #4a4a4a);font-size:14px;margin:0 0 12px;">Your enquiry has been submitted successfully.</p>
+            <div class="enquiry-id-badge" id="enquiry-success-id">ENQ0001</div>
+            <div style="margin-top:20px;">
+              <button type="button" class="btn primary sm" onclick="closeEnquiryModal();">Done</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+window.openEnquiryModal = function() {
+  initEnquiryModalSystem();
+  const overlay = document.getElementById('enquiry-modal-overlay');
+  const alertEl = document.getElementById('enquiry-alert');
+  const formEl = document.getElementById('enquiry-system-form');
+  const successEl = document.getElementById('enquiry-success-container');
+  
+  if (alertEl) { alertEl.style.display = 'none'; alertEl.className = 'enquiry-alert'; }
+  if (formEl) formEl.style.display = 'block';
+  if (successEl) successEl.style.display = 'none';
+
+  if (overlay) overlay.classList.add('open');
+};
+
+window.closeEnquiryModal = function() {
+  const overlay = document.getElementById('enquiry-modal-overlay');
+  if (overlay) overlay.classList.remove('open');
+};
+
+window.handleEnquiryFormSubmit = async function(e) {
+  e.preventDefault();
+  const alertEl = document.getElementById('enquiry-alert');
+  const submitBtn = document.getElementById('enq-submit-btn');
+  const nameEl = document.getElementById('enq-name');
+  const phoneEl = document.getElementById('enq-phone');
+  const emailEl = document.getElementById('enq-email');
+  const addressEl = document.getElementById('enq-address');
+  const leadTypeEl = document.getElementById('enq-lead-type');
+  
+  const checkboxes = document.querySelectorAll('input[name="enquiry_type"]:checked');
+  
+  function showError(msg) {
+    if (alertEl) {
+      alertEl.className = 'enquiry-alert error';
+      alertEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${escapeHTML(msg)}`;
+      alertEl.style.display = 'flex';
+    }
+  }
+
+  const name = (nameEl ? nameEl.value : '').trim();
+  const phone = (phoneEl ? phoneEl.value : '').trim();
+  const email = (emailEl ? emailEl.value : '').trim();
+  const address = (addressEl ? addressEl.value : '').trim();
+  const leadType = (leadTypeEl ? leadTypeEl.value : '').trim();
+  const selectedTypes = Array.from(checkboxes).map(cb => cb.value);
+
+  // Frontend validations
+  if (!name) {
+    showError('Please enter your name.');
+    if (nameEl) nameEl.focus();
+    return;
+  }
+
+  if (!phone) {
+    showError('Please enter your phone number.');
+    if (phoneEl) phoneEl.focus();
+    return;
+  }
+
+  const cleanPhone = phone.replace(/[\s-]/g, '');
+  if (!/^(?:\+?91)?[6-9]\d{9}$/.test(cleanPhone)) {
+    showError('Please enter a valid Indian phone number (e.g. 9876543210 or +91 9876543210).');
+    if (phoneEl) phoneEl.focus();
+    return;
+  }
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showError('Please enter a valid email address.');
+    if (emailEl) emailEl.focus();
+    return;
+  }
+
+  if (!leadType) {
+    showError('Please select your Lead Type (Wholesaler, Dealer, Reseller, or Customer).');
+    if (leadTypeEl) leadTypeEl.focus();
+    return;
+  }
+
+  if (selectedTypes.length === 0) {
+    showError('Please select at least one enquiry type.');
+    return;
+  }
+
+  // Clear previous error
+  if (alertEl) alertEl.style.display = 'none';
+
+  // Loading state
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+  }
+
+  let enquiryId = null;
+  let success = false;
+
+  function showSuccessView(id) {
+    const formEl = document.getElementById('enquiry-system-form');
+    const successEl = document.getElementById('enquiry-success-container');
+    const successIdEl = document.getElementById('enquiry-success-id');
+
+    if (formEl) formEl.style.display = 'none';
+    if (successIdEl) successIdEl.textContent = 'Enquiry ID: ' + id;
+    if (successEl) successEl.style.display = 'block';
+
+    if (formEl) formEl.reset();
+  }
+
+  // 1. Try Backend API first (relative /api/enquiries or localhost:3000/api/enquiries)
+  const apiEndpoints = ['/api/enquiries', 'http://localhost:3000/api/enquiries'];
+
+  for (const endpoint of apiEndpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name,
+          phone: phone,
+          email: email,
+          address: address,
+          lead_type: leadType,
+          enquiry_type: selectedTypes
+        })
+      });
+
+      const resText = await res.text();
+      let data = null;
+      try { data = JSON.parse(resText); } catch (e) { data = null; }
+
+      if (res.ok && data && data.success && data.enquiry_id) {
+        enquiryId = data.enquiry_id;
+        success = true;
+        break;
+      }
+    } catch (fetchErr) {
+      // Backend not running on this URL, try next or fallback
+    }
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Enquiry';
+  }
+
+  // If Backend API succeeded
+  if (success && enquiryId) {
+    showSuccessView(enquiryId);
+    return;
+  }
+
+  // 2. Client-side Fallback Mode (Static Server / Live Server)
+  try {
+    const existingStr = localStorage.getItem('oncost_enquiries') || '[]';
+    let localEnquiries = [];
+    try { localEnquiries = JSON.parse(existingStr); } catch (e) { localEnquiries = []; }
+
+    let maxId = 0;
+    localEnquiries.forEach(item => {
+      const match = String(item.enquiry_id || '').match(/ENQ(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxId) maxId = num;
+      }
+    });
+
+    const nextNum = maxId + 1;
+    enquiryId = 'ENQ' + String(nextNum).padStart(4, '0');
+
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const dateTimeStr = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+    const newEnquiry = {
+      enquiry_id: enquiryId,
+      datetime: dateTimeStr,
+      name: name,
+      phone: phone,
+      email: email || '',
+      address: address || '',
+      lead_type: leadType,
+      enquiry_type: selectedTypes.join(', ')
+    };
+
+    localEnquiries.push(newEnquiry);
+    localStorage.setItem('oncost_enquiries', JSON.stringify(localEnquiries));
+
+    // Also persist directly into Supabase database leads table if client is present
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+      try {
+        await supabaseClient.from('leads').insert({
+          summary: `Name: ${name} | Email: ${email || ''} | Phone: ${phone} | Event: ${selectedTypes.join(', ')} | Message: ${address || ''}`,
+          status: 'New'
+        });
+      } catch (sbErr) {
+        console.error('Failed fallback insert into Supabase leads:', sbErr);
+      }
+    }
+
+    showSuccessView(enquiryId);
+  } catch (err) {
+    showError(err.message || 'Failed to submit enquiry. Please try again.');
+  }
+};
+
+// Auto-initialize modal on page load
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    initEnquiryModalSystem();
+    
+    // Attach click event to any button/link with data-open-enquiry or enquiry class
+    document.addEventListener('click', (e) => {
+      const target = e.target.closest('[data-open-enquiry], .open-enquiry-modal');
+      if (target) {
+        e.preventDefault();
+        openEnquiryModal();
+      }
+    });
+  });
+}
+

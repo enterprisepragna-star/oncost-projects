@@ -1355,6 +1355,12 @@ function openProductForm(id) {
       if (clean && !finalImages.includes(clean) && finalImages.length < MAX_IMAGES) finalImages.push(clean);
     });
     const isCombo = $(`${formId}-is_combo`)?.checked || false;
+    let enteredCat = $(`${formId}-category`).value.trim() || null;
+    if (enteredCat) {
+      const normInput = enteredCat.replace(/\s+/g, ' ').toLowerCase();
+      const matchedCat = state.categories.find(c => (c.name || '').trim().replace(/\s+/g, ' ').toLowerCase() === normInput);
+      enteredCat = matchedCat ? matchedCat.name : enteredCat.replace(/\s+/g, ' ');
+    }
     const payload = {
       id: newId, name,
       sku: $(`${formId}-sku`).value.trim() || null,
@@ -1367,7 +1373,7 @@ function openProductForm(id) {
       gst_percent: Number($(`${formId}-gst_percent`).value || 0),
       has_variants: $(`${formId}-has_variants`).checked,
       status: $(`${formId}-status`).value,
-      category: $(`${formId}-category`).value.trim() || null,
+      category: enteredCat,
       badge: $(`${formId}-badge`).value.trim() || null,
       price: Number($(`${formId}-price`).value) || 0,
       offer_price: $(`${formId}-offer_price`).value ? Number($(`${formId}-offer_price`).value) : null,
@@ -1453,9 +1459,27 @@ function openProductForm(id) {
 window.openProductForm = openProductForm;
 
 // ------------------------- Categories -------------------------
+function dedupeAdminCategories(rawCats) {
+  if (!Array.isArray(rawCats)) return [];
+  const map = new Map();
+  for (const c of rawCats) {
+    if (!c || !c.name) continue;
+    const norm = c.name.trim().replace(/\s+/g, ' ').toLowerCase();
+    if (!map.has(norm)) {
+      map.set(norm, { ...c, name: c.name.trim().replace(/\s+/g, ' ') });
+    } else {
+      const existing = map.get(norm);
+      if (c.name === 'Brass Collection' || (!existing.description && c.description) || (!existing.image_url && c.image_url)) {
+        map.set(norm, { ...existing, ...c, name: c.name === 'Brass Collection' ? 'Brass Collection' : existing.name });
+      }
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 async function loadCategories() {
   const { data } = await supabaseClient.from('categories').select('*').order('name', { ascending: true });
-  state.categories = data || [];
+  state.categories = dedupeAdminCategories(data || []);
 }
 function renderCategories() {
   $('categories-sub').textContent = `${state.categories.length} categories.`;
@@ -1465,7 +1489,8 @@ function renderCategories() {
     return;
   }
   tbody.innerHTML = state.categories.map(c => {
-    const used = state.products.filter(p => (p.category||'') === c.name).length;
+    const normCat = (c.name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const used = state.products.filter(p => (p.category||'').trim().replace(/\s+/g, ' ').toLowerCase() === normCat).length;
     return `<tr data-testid="cat-row-${escapeHTML(c.id)}">
       <td style="font-weight:600">${escapeHTML(c.name)}</td>
       <td style="color:var(--admin-text-mute)">${escapeHTML(c.description||'—')}</td>
@@ -1491,8 +1516,14 @@ function openCategoryForm(id) {
   const m = openModal({ title: isEdit ? `Edit Category` : 'New Category', size: 'sm', body: html, footer, testid: 'cf' });
   $('cf-cancel').onclick = () => m.close();
   $('cf-save').onclick = async () => {
-    const name = $('cf-name').value.trim();
-    if (!name) return showToast('Name required.', 'error');
+    const rawName = $('cf-name').value.trim();
+    if (!rawName) return showToast('Name required.', 'error');
+    const name = rawName.replace(/\s+/g, ' ');
+    const normNew = name.toLowerCase();
+    const existingDup = state.categories.find(x => (!isEdit || x.id !== c.id) && x.name.trim().replace(/\s+/g, ' ').toLowerCase() === normNew);
+    if (existingDup) {
+      return showToast(`Category "${existingDup.name}" already exists. Cannot create duplicate.`, 'error');
+    }
     const payload = { name, description: $('cf-description').value.trim() || null, image_url: $('cf-image_url').value.trim() || null };
     let res;
     if (isEdit) res = await supabaseClient.from('categories').update(payload).eq('id', c.id).select().single();
@@ -1502,7 +1533,7 @@ function openCategoryForm(id) {
       const idx = state.categories.findIndex(x => x.id === c.id);
       state.categories[idx] = res.data;
     } else state.categories.push(res.data);
-    state.categories.sort((a,b) => a.name.localeCompare(b.name));
+    state.categories = dedupeAdminCategories(state.categories);
     renderCategories();
     renderProducts();
     showToast(isEdit ? 'Category saved.' : 'Category created.');

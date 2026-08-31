@@ -4,6 +4,7 @@
   "private": true,
   "description": "ONCOST premium gifting storefront — static HTML + Vercel serverless functions + Supabase",
   "scripts": {
+    "start": "node server.js",
     "build": "echo 'No build needed — static site'",
     "vercel-build": "echo 'No build needed — static site'"
   },
@@ -12,6 +13,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2",
     "pdf-lib": "^1.17.1",
     "resend": "^6.12.4"
   }
