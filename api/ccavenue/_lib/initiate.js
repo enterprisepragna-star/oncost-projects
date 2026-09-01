@@ -221,38 +221,10 @@ module.exports = async function handler(req, res) {
       min-height: 100vh;
       margin: 0;
       padding: 20px;
-      background-color: #3b0a1a;
-      color: #ffffff;
+      background-color: #fbf7ef;
+      color: #2f2728;
       position: relative;
       overflow: hidden;
-    }
-    .gifting-bg-container {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      overflow: hidden;
-      pointer-events: none;
-      background: 
-        radial-gradient(circle at 15% 20%, rgba(255, 78, 136, 0.45), transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(112, 40, 232, 0.45), transparent 50%),
-        radial-gradient(circle at 50% 85%, rgba(255, 126, 95, 0.4), transparent 45%),
-        radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.35), transparent 40%),
-        linear-gradient(135deg, #3b0a1a 0%, #21050e 50%, #150309 100%);
-      background-size: 200% 200%;
-      animation: meshShift 14s ease infinite alternate;
-    }
-    @keyframes meshShift {
-      0% { background-position: 0% 0%; }
-      100% { background-position: 100% 100%; }
-    }
-    .gifting-art-overlay {
-      position: absolute;
-      inset: 0;
-      background-image: url('/assets/gifting-bg.png');
-      background-size: cover;
-      background-position: center;
-      opacity: 0.35;
-      mix-blend-mode: overlay;
     }
     .pay-card {
       position: relative;
@@ -323,9 +295,7 @@ module.exports = async function handler(req, res) {
   </style>
 </head>
 <body>
-  <div class="gifting-bg-container">
-    <div class="gifting-art-overlay"></div>
-  </div>
+
   <div class="pay-card">
     <div class="shimmer-top"></div>
     <div class="pay-badge">🔒 256-Bit Encrypted Payment</div>

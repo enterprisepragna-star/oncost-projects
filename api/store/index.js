@@ -209,6 +209,25 @@ async function complaintSubmit(req, res) {
     body: JSON.stringify(payload),
   }).catch((e) => console.error('[store/complaint-submit] email failed:', e.message));
 
+  // Also append complaint details into enquiries.xlsx
+  try {
+    const enquiriesHandler = require('../enquiries');
+    const fakeReq = {
+      method: 'POST',
+      body: {
+        name,
+        phone: b.phone ? String(b.phone).trim() : '',
+        email,
+        event: category,
+        message: `Subject: ${subject} | Description: ${description}${orderInput ? ' | Order: ' + orderInput : ''}`,
+        lead_type: 'Customer',
+        enquiry_type: ['Support Ticket']
+      }
+    };
+    const fakeRes = { statusCode: 200, setHeader: () => {}, end: () => {}, json: () => {} };
+    await enquiriesHandler(fakeReq, fakeRes);
+  } catch (e) {}
+
   fire({ type: 'complaint_admin_notify', data: { ticket, name, email, phone: b.phone || '', category, subject, description, order_id: orderInput || '' } });
   fire({ type: 'complaint_ack', to: email, data: { ticket, name, subject } });
 

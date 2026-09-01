@@ -1633,26 +1633,61 @@ function setupEnquiryForm() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
+
+    const countrySelect = form.querySelector('[name="countryCode"]');
+    let phoneVal = String(fd.get('phone') || '').trim();
+    if (countrySelect && phoneVal) {
+      const opt = countrySelect.options[countrySelect.selectedIndex];
+      if (opt) {
+        const match = opt.textContent.match(/\(\+(\d+)\)/);
+        if (match && !phoneVal.startsWith('+')) {
+          phoneVal = `+${match[1]} ${phoneVal}`;
+        }
+      }
+    }
+
     const data = {
-      name: fd.get('name'), email: fd.get('email'), phone: fd.get('phone'),
-      gstin: fd.get('gstin')||'', event: fd.get('eventType'), qty: fd.get('quantity'),
-      date: fd.get('eventDate')||'', budget: fd.get('budget')||'', message: fd.get('message')||'',
+      name: String(fd.get('name') || '').trim(),
+      email: String(fd.get('email') || '').trim(),
+      phone: phoneVal,
+      gstin: String(fd.get('gstin') || '').trim(),
+      event: String(fd.get('eventType') || fd.get('event') || '').trim(),
+      qty: String(fd.get('quantity') || fd.get('qty') || '').trim(),
+      date: String(fd.get('eventDate') || fd.get('date') || '').trim(),
+      budget: String(fd.get('budget') || '').trim(),
+      message: String(fd.get('message') || '').trim(),
+      address: String(fd.get('address') || '').trim()
     };
     const summary = `Name: ${data.name} | Email: ${data.email} | Phone: ${data.phone} | GSTIN: ${data.gstin||'—'} | Event: ${data.event} | Qty: ${data.qty} | Date: ${data.date||'—'} | Budget: ${data.budget||'—'} | Message: ${data.message||'—'}`;
     try {
-      // 1. Submit to Excel API (/api/enquiries)
+      // 1. Submit to Excel API (/api/enquiries) with exact individual fields
       try {
-        await fetch('/api/enquiries', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: data.name,
-            phone: data.phone,
-            email: data.email,
-            address: data.message || '',
-            enquiry_type: [data.event === 'Corporate' ? 'Corporate Gifting' : 'Bulk Orders']
-          })
-        });
+        const apiEndpoints = ['/api/enquiries', 'http://localhost:3000/api/enquiries', 'http://127.0.0.1:3000/api/enquiries'];
+        for (const ep of apiEndpoints) {
+          try {
+            const rExcel = await fetch(ep, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: data.name,
+                phone: data.phone,
+                email: data.email,
+                gstin: data.gstin,
+                event: data.event,
+                qty: data.qty,
+                quantity: data.qty,
+                date: data.date,
+                eventDate: data.date,
+                budget: data.budget,
+                message: data.message,
+                address: data.address,
+                lead_type: 'Customer',
+                enquiry_type: [data.event === 'Corporate' ? 'Corporate Gifting' : 'Bulk Orders']
+              })
+            });
+            if (rExcel.ok) break;
+          } catch (e) {}
+        }
       } catch (excelErr) {
         console.error('Excel submission failed from form submit handler:', excelErr);
       }
@@ -2313,7 +2348,7 @@ window.handleEnquiryFormSubmit = async function(e) {
   }
 
   // 1. Try Backend API first (relative /api/enquiries or localhost:3000/api/enquiries)
-  const apiEndpoints = ['/api/enquiries', 'http://localhost:3000/api/enquiries'];
+  const apiEndpoints = ['/api/enquiries', 'http://localhost:3000/api/enquiries', 'http://127.0.0.1:3000/api/enquiries'];
 
   for (const endpoint of apiEndpoints) {
     try {

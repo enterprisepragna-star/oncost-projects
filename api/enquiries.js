@@ -27,11 +27,12 @@ function formatDateTime(d = new Date()) {
   return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
 }
 
-// Indian Phone Number Validation: accepts 9876543210, +919876543210, +91 9876543210, 91 9876543210
+// Indian Phone Number Validation: accepts 9876543210, +919876543210, 09876543210, +91 9876543210
 function isValidIndianPhone(phone) {
   if (!phone || typeof phone !== 'string') return false;
-  const cleanPhone = phone.trim().replace(/[\s-]/g, '');
-  return /^(?:\+?91)?[6-9]\d{9}$/.test(cleanPhone);
+  const cleanPhone = phone.trim().replace(/[\s-()]/g, '').replace(/^\+?91/, '').replace(/^0/, '');
+  if (/^[6-9]\d{9}$/.test(cleanPhone)) return true;
+  return /^\+?\d{7,15}$/.test(phone.trim().replace(/[\s-()]/g, ''));
 }
 
 // Basic Email Validation
@@ -40,26 +41,61 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
+const DESIRED_COLUMNS = [
+  { header: 'Enquiry ID', key: 'enquiry_id', width: 15 },
+  { header: 'Date & Time', key: 'datetime', width: 22 },
+  { header: 'Name', key: 'name', width: 25 },
+  { header: 'Phone Number', key: 'phone', width: 18 },
+  { header: 'Email', key: 'email', width: 25 },
+  { header: 'Lead Type', key: 'lead_type', width: 15 },
+  { header: 'Enquiry Type', key: 'enquiry_type', width: 25 },
+  { header: 'GSTIN', key: 'gstin', width: 20 },
+  { header: 'Event Type', key: 'event', width: 20 },
+  { header: 'Quantity', key: 'quantity', width: 15 },
+  { header: 'Event Date', key: 'event_date', width: 18 },
+  { header: 'Budget', key: 'budget', width: 18 },
+  { header: 'Address', key: 'address', width: 30 },
+  { header: 'Message', key: 'message', width: 40 }
+];
+
 async function getOrCreateWorkbook() {
   const workbook = new ExcelJS.Workbook();
-  if (fs.existsSync(EXCEL_FILE_PATH)) {
-    await workbook.xlsx.readFile(EXCEL_FILE_PATH);
-  } else {
-    const worksheet = workbook.addWorksheet('Enquiries');
-    worksheet.columns = [
-      { header: 'Enquiry ID', key: 'enquiry_id', width: 15 },
-      { header: 'Date & Time', key: 'datetime', width: 22 },
-      { header: 'Name', key: 'name', width: 25 },
-      { header: 'Phone Number', key: 'phone', width: 18 },
-      { header: 'Email', key: 'email', width: 25 },
-      { header: 'Address', key: 'address', width: 35 },
-      { header: 'Lead Type', key: 'lead_type', width: 20 },
-      { header: 'Enquiry Type', key: 'enquiry_type', width: 35 }
-    ];
-    // Style headers
+  let loaded = false;
+
+  const backupFile = path.resolve(process.cwd(), 'enquiries_updated.xlsx');
+  if (fs.existsSync(backupFile)) {
+    try {
+      await workbook.xlsx.readFile(backupFile);
+      loaded = true;
+    } catch (e) {}
+  }
+
+  if (!loaded && fs.existsSync(EXCEL_FILE_PATH)) {
+    try {
+      await workbook.xlsx.readFile(EXCEL_FILE_PATH);
+      loaded = true;
+    } catch (err) {
+      console.warn('enquiries.xlsx read warning:', err.message);
+    }
+  }
+
+  let worksheet = workbook.getWorksheet('Enquiries') || workbook.worksheets[0];
+
+  if (!worksheet) {
+    worksheet = workbook.addWorksheet('Enquiries');
+    worksheet.columns = DESIRED_COLUMNS;
     const headerRow = worksheet.getRow(1);
     headerRow.font = { bold: true };
-    await workbook.xlsx.writeFile(EXCEL_FILE_PATH);
+  } else {
+    // Ensure header row has all 14 columns
+    const headerRow = worksheet.getRow(1);
+    if (headerRow.cellCount < DESIRED_COLUMNS.length) {
+      DESIRED_COLUMNS.forEach((col, idx) => {
+        const cell = headerRow.getCell(idx + 1);
+        if (!cell.value) cell.value = col.header;
+      });
+      headerRow.font = { bold: true };
+    }
   }
   return workbook;
 }
@@ -100,10 +136,20 @@ async function handlePost(req, res) {
   const name = String(body.name || '').trim();
   const phone = String(body.phone || '').trim();
   const email = String(body.email || '').trim();
-  const address = String(body.address || '').trim();
-  const leadType = String(body.lead_type || body.leadType || '').trim();
-  let enquiryTypes = body.enquiry_type || body.enquiry_types || [];
+  const gstin = String(body.gstin || body.gst || '').trim();
+  const event = String(body.event || body.eventType || body.event_type || '').trim();
+  const quantity = String(body.qty || body.quantity || '').trim();
+  const eventDate = String(body.date || body.eventDate || body.event_date || '').trim();
+  const budget = String(body.budget || '').trim();
+  const address = String(body.address || body.location || '').trim();
+  const message = String(body.message || '').trim();
 
+  let leadType = String(body.lead_type || body.leadType || '').trim();
+  if (!leadType || !VALID_LEAD_TYPES.includes(leadType)) {
+    leadType = 'Customer';
+  }
+
+  let enquiryTypes = body.enquiry_type || body.enquiry_types || [];
   if (typeof enquiryTypes === 'string') {
     enquiryTypes = enquiryTypes.split(',').map(s => s.trim()).filter(Boolean);
   }
@@ -111,8 +157,11 @@ async function handlePost(req, res) {
     enquiryTypes = [];
   }
 
-  // Filter & validate enquiry types against allowed values
-  let selectedTypes = enquiryTypes.filter(type => VALID_ENQUIRY_TYPES.includes(type));
+  let selectedTypes = enquiryTypes.map(s => String(s).trim()).filter(Boolean);
+  if (selectedTypes.length === 0) {
+    const fallbackType = event || 'Bulk Orders';
+    selectedTypes = [String(fallbackType).trim()];
+  }
 
   // Validation Rules
   if (!name) {
@@ -124,23 +173,11 @@ async function handlePost(req, res) {
   }
 
   if (!isValidIndianPhone(phone)) {
-    return sendJson(res, 400, { success: false, message: 'Please enter a valid Indian phone number (e.g. 9876543210 or +91 9876543210).' });
+    return sendJson(res, 400, { success: false, message: 'Please enter a valid phone number (e.g. 9876543210 or +91 9876543210).' });
   }
 
   if (email && !isValidEmail(email)) {
     return sendJson(res, 400, { success: false, message: 'Please enter a valid email address.' });
-  }
-
-  if (!leadType) {
-    return sendJson(res, 400, { success: false, message: 'Please select a Lead Type (Wholesaler, Dealer, Reseller, or Customer).' });
-  }
-
-  if (!VALID_LEAD_TYPES.includes(leadType)) {
-    return sendJson(res, 400, { success: false, message: 'Invalid Lead Type selected.' });
-  }
-
-  if (selectedTypes.length === 0) {
-    return sendJson(res, 400, { success: false, message: 'Please select at least one enquiry type.' });
   }
 
   // Perform excel write within lock
@@ -176,10 +213,16 @@ async function handlePost(req, res) {
         dateTimeStr,
         name,
         phone,
-        email || '',
-        address || '',
+        email || '-',
         leadType,
-        enquiryTypeStr
+        enquiryTypeStr,
+        gstin || '-',
+        event || '-',
+        quantity || '-',
+        eventDate || '-',
+        budget || '-',
+        address || '-',
+        message || '-'
       ]);
 
       let SUPABASE_URL = (process.env.SUPABASE_URL || '').trim();
@@ -199,7 +242,7 @@ async function handlePost(req, res) {
               'Prefer': 'return=minimal'
             },
             body: JSON.stringify({
-              summary: `Name: ${name} | Email: ${email || ''} | Phone: ${phone} | Event: ${enquiryTypeStr} | Message: ${address || ''}`,
+              summary: `Name: ${name} | Email: ${email || ''} | Phone: ${phone} | GSTIN: ${gstin || '-'} | Event: ${event || enquiryTypeStr} | Qty: ${quantity || '-'} | Date: ${eventDate || '-'} | Budget: ${budget || '-'} | Message: ${message || address || ''}`,
               status: 'New'
             })
           });
@@ -208,16 +251,28 @@ async function handlePost(req, res) {
         }
       }
 
-      const writeWithRetry = async (retries = 5, delay = 500) => {
+      const writeWithRetry = async (retries = 3, delay = 300) => {
         for (let i = 0; i < retries; i++) {
           try {
             await workbook.xlsx.writeFile(EXCEL_FILE_PATH);
+            const backupFile = path.resolve(process.cwd(), 'enquiries_updated.xlsx');
+            if (fs.existsSync(backupFile)) {
+              try { fs.unlinkSync(backupFile); } catch (e) {}
+            }
             return;
           } catch (wErr) {
             if ((wErr.code === 'EBUSY' || wErr.code === 'EACCES') && i < retries - 1) {
               await new Promise(r => setTimeout(r, delay));
             } else {
-              throw wErr;
+              try {
+                const backupFile = path.resolve(process.cwd(), 'enquiries_updated.xlsx');
+                await workbook.xlsx.writeFile(backupFile);
+                console.warn('[NOTICE] enquiries.xlsx is currently open in Excel. Saved enquiry to enquiries_updated.xlsx.');
+                return;
+              } catch (tmpErr) {
+                console.error('Direct write to enquiries.xlsx error:', wErr.message);
+                return;
+              }
             }
           }
         }
@@ -237,28 +292,13 @@ async function handlePost(req, res) {
       enquiry_id: result.enquiry_id
     });
   } catch (err) {
-    console.error('Error saving enquiry to Excel:', err);
-    return sendJson(res, 500, {
-      success: false,
-      message: 'Server error while saving enquiry. Please try again.'
-    });
+    console.error('Error saving enquiry:', err);
   }
 }
 
 async function handleDownload(req, res) {
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Enquiries');
-  worksheet.columns = [
-    { header: 'Enquiry ID', key: 'enquiry_id', width: 15 },
-    { header: 'Date & Time', key: 'datetime', width: 22 },
-    { header: 'Name', key: 'name', width: 25 },
-    { header: 'Phone Number', key: 'phone', width: 18 },
-    { header: 'Email', key: 'email', width: 25 },
-    { header: 'Address', key: 'address', width: 35 },
-    { header: 'Enquiry Type', key: 'enquiry_type', width: 35 }
-  ];
-  const headerRow = worksheet.getRow(1);
-  headerRow.font = { bold: true };
+  const workbook = await getOrCreateWorkbook();
+  const worksheet = workbook.getWorksheet('Enquiries') || workbook.worksheets[0];
 
   let SUPABASE_URL = (process.env.SUPABASE_URL || '').trim();
   if (!SUPABASE_URL.startsWith('http') || SUPABASE_URL.startsWith('sb_')) {
@@ -280,27 +320,62 @@ async function handleDownload(req, res) {
     }
   }
 
+  // Collect existing phone/email combinations in worksheet
+  const existingKeys = new Set();
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const phoneVal = String(row.getCell(4).value || '').trim();
+    const emailVal = String(row.getCell(5).value || '').trim();
+    if (phoneVal || emailVal) {
+      existingKeys.add(`${phoneVal}_${emailVal}`);
+    }
+  });
+
   if (Array.isArray(leads) && leads.length > 0) {
-    leads.forEach((l, idx) => {
-      const enquiryId = 'ENQ' + String(idx + 1).padStart(4, '0');
-      const d = parseSummary(l.summary || '');
-      const dtStr = l.created_at ? formatDateTime(new Date(l.created_at)) : formatDateTime();
-      worksheet.addRow([
-        enquiryId,
-        dtStr,
-        d.Name || d.name || 'Customer',
-        d.Phone || d.phone || '',
-        d.Email || d.email || '',
-        d.Message || d.message || d.summary || '',
-        d.Event || d.event || 'Bulk Orders'
-      ]);
+    let maxId = 0;
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const cellVal = row.getCell(1).value;
+      const cellStr = String(cellVal || '');
+      const match = cellStr.match(/ENQ(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxId) maxId = num;
+      }
     });
-  } else if (fs.existsSync(EXCEL_FILE_PATH)) {
+
+    leads.forEach((l) => {
+      const d = parseSummary(l.summary || '');
+      const phone = d.Phone || d.phone || '';
+      const email = d.Email || d.email || '';
+      const key = `${phone.trim()}_${email.trim()}`;
+
+      if (!existingKeys.has(key)) {
+        existingKeys.add(key);
+        maxId++;
+        const enquiryId = 'ENQ' + String(maxId).padStart(4, '0');
+        const dtStr = l.created_at ? formatDateTime(new Date(l.created_at)) : formatDateTime();
+        worksheet.addRow([
+          enquiryId,
+          dtStr,
+          d.Name || d.name || 'Customer',
+          phone || '-',
+          email || '-',
+          d['Lead Type'] || d.lead_type || 'Customer',
+          d.EnquiryType || d.enquiry_type || 'Bulk Orders',
+          d.GSTIN || d.gstin || '-',
+          d.Event || d.event || '-',
+          d.Qty || d.quantity || '-',
+          d.Date || d.eventDate || d.event_date || '-',
+          d.Budget || d.budget || '-',
+          d.Address || d.address || '-',
+          d.Message || d.message || '-'
+        ]);
+      }
+    });
+
     try {
-      const fileStream = fs.createReadStream(EXCEL_FILE_PATH);
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', 'attachment; filename="enquiries.xlsx"');
-      return fileStream.pipe(res);
+      await workbook.xlsx.writeFile(EXCEL_FILE_PATH);
     } catch (e) {}
   }
 
