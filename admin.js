@@ -1401,19 +1401,27 @@ function openProductForm(id) {
     }
     let res;
     if (isEdit) {
-      res = await supabaseClient.from('products').update(payload).eq('id', p.id).select().single();
+      res = await supabaseClient.from('products').update(payload).eq('id', p.id).select();
     } else {
-      res = await supabaseClient.from('products').upsert(payload).select().single();
+      res = await supabaseClient.from('products').upsert(payload).select();
     }
     if (res.error && res.error.message?.includes('image_urls')) {
       // DB migration not run yet — retry without gallery so save still works
       delete payload.image_urls;
       res = isEdit
-        ? await supabaseClient.from('products').update(payload).eq('id', p.id).select().single()
-        : await supabaseClient.from('products').upsert(payload).select().single();
+        ? await supabaseClient.from('products').update(payload).eq('id', p.id).select()
+        : await supabaseClient.from('products').upsert(payload).select();
       if (!res.error) showToast('Saved without gallery — run migration_phase4_loyalty_multiimage.sql in Supabase to enable multiple images.', 'error');
     }
+    
+    // Fix: "Cannot coerce the result to a single JSON object"
+    // Instead of using .single() which can throw if PostgREST returns an array, we extract it manually.
+    if (res.data && Array.isArray(res.data)) {
+      res.data = res.data[0];
+    }
+
     if (res.error) return showToast('Save failed: ' + res.error.message, 'error');
+    if (!res.data) return showToast('Save failed: Could not save product (check RLS permissions)', 'error');
 
     if (payload.has_variants && window.__pf_get_variants) {
       const productId = res.data.id;
@@ -1495,9 +1503,10 @@ function openCategoryForm(id) {
     if (!name) return showToast('Name required.', 'error');
     const payload = { name, description: $('cf-description').value.trim() || null, image_url: $('cf-image_url').value.trim() || null };
     let res;
-    if (isEdit) res = await supabaseClient.from('categories').update(payload).eq('id', c.id).select().single();
-    else        res = await supabaseClient.from('categories').insert(payload).select().single();
-    if (res.error) return showToast('Save failed: ' + res.error.message, 'error');
+    if (isEdit) res = await supabaseClient.from('categories').update(payload).eq('id', c.id).select();
+    else        res = await supabaseClient.from('categories').insert(payload).select();
+    if (res.data && Array.isArray(res.data)) res.data = res.data[0];
+if (res.error) return showToast('Save failed: ' + res.error.message, 'error');
     if (isEdit) {
       const idx = state.categories.findIndex(x => x.id === c.id);
       state.categories[idx] = res.data;
@@ -2421,9 +2430,10 @@ function openCouponForm(id) {
       expires_at: $('co-expires_at').value ? new Date($('co-expires_at').value).toISOString() : null,
     };
     let res;
-    if (isEdit) res = await supabaseClient.from('coupons').update(payload).eq('id', c.id).select().single();
-    else res = await supabaseClient.from('coupons').insert(payload).select().single();
-    if (res.error) return showToast('Save failed: ' + res.error.message, 'error');
+    if (isEdit) res = await supabaseClient.from('coupons').update(payload).eq('id', c.id).select();
+    else res = await supabaseClient.from('coupons').insert(payload).select();
+    if (res.data && Array.isArray(res.data)) res.data = res.data[0];
+if (res.error) return showToast('Save failed: ' + res.error.message, 'error');
     if (isEdit) state.coupons = state.coupons.map(x => x.id === c.id ? res.data : x);
     else state.coupons.unshift(res.data);
     renderCoupons();
@@ -2501,9 +2511,10 @@ function openSaleForm(id) {
       is_active: $('se-is_active').value === 'true',
     };
     let res;
-    if (isEdit) res = await supabaseClient.from('sale_events').update(payload).eq('id', s.id).select().single();
-    else res = await supabaseClient.from('sale_events').insert(payload).select().single();
-    if (res.error) return showToast('Save failed: ' + res.error.message, 'error');
+    if (isEdit) res = await supabaseClient.from('sale_events').update(payload).eq('id', s.id).select();
+    else res = await supabaseClient.from('sale_events').insert(payload).select();
+    if (res.data && Array.isArray(res.data)) res.data = res.data[0];
+if (res.error) return showToast('Save failed: ' + res.error.message, 'error');
     if (isEdit) state.sales = state.sales.map(x => x.id === s.id ? res.data : x);
     else state.sales.unshift(res.data);
     renderSales();
@@ -3022,9 +3033,10 @@ function openTestimonialForm(id) {
     if (!payload.customer_name) return showToast('Customer name required.', 'error');
     if (!payload.review_text) return showToast('Review text required.', 'error');
     let res;
-    if (isEdit) res = await supabaseClient.from('testimonials').update(payload).eq('id', t.id).select().single();
-    else        res = await supabaseClient.from('testimonials').insert(payload).select().single();
-    if (res.error) {
+    if (isEdit) res = await supabaseClient.from('testimonials').update(payload).eq('id', t.id).select();
+    else        res = await supabaseClient.from('testimonials').insert(payload).select();
+    if (res.data && Array.isArray(res.data)) res.data = res.data[0];
+if (res.error) {
       if (res.error.message?.includes('product_id') || res.error.message?.includes('title')) {
         return showToast('Run migration_reviews.sql in Supabase first.', 'error');
       }
