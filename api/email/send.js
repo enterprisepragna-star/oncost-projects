@@ -58,6 +58,31 @@ module.exports = async function handler(req, res) {
         }
       }
 
+      // Save to Excel enquiries.xlsx
+      try {
+        const enquiriesHandler = require('../enquiries');
+        const fakeReq = {
+          method: 'POST',
+          body: {
+            name: data.name || '',
+            phone: data.phone || '',
+            email: data.email || '',
+            address: `Event: ${data.event || '-'}, Qty: ${data.qty || '-'}, Date: ${data.date || '-'}, Budget: ${data.budget || '-'}, Msg: ${data.message || '-'}`,
+            enquiry_type: [data.event === 'Corporate' ? 'Corporate Gifting' : 'Bulk Orders']
+          }
+        };
+        const fakeRes = {
+          statusCode: 200,
+          headersSent: false,
+          setHeader: () => {},
+          end: () => {},
+          json: () => {}
+        };
+        await enquiriesHandler(fakeReq, fakeRes);
+      } catch (exErr) {
+        console.error('[email/send] Excel append exception:', exErr.message);
+      }
+
       recipient = ADMIN_EMAIL;
       subject = `🔔 New enquiry from ${data.name || 'a customer'}`;
       html = `<div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fdfaf3;">

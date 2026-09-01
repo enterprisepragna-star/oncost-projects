@@ -206,18 +206,110 @@ module.exports = async function handler(req, res) {
   const checkoutUrl = 'https://secure.ccavenue.com/transaction/transaction.do?command=initiateTransaction';
 
   const html = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Redirecting to CCAvenue…</title>
-<style>body{font-family:system-ui;display:grid;place-items:center;min-height:100vh;margin:0;background:#7a1f35;color:#f2dd92;text-align:center;padding:24px;}.s{width:34px;height:34px;border:3px solid currentColor;border-bottom-color:transparent;border-radius:50%;animation:r 0.8s linear infinite;margin-bottom:14px;}@keyframes r{to{transform:rotate(360deg)}}</style></head>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Redirecting to Secure Payment · ONCOST Personal Gifting</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      background-color: #fbf7ef;
+      color: #2f2728;
+      position: relative;
+      overflow: hidden;
+    }
+    .pay-card {
+      position: relative;
+      z-index: 2;
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1.5px solid rgba(255, 215, 0, 0.45);
+      border-radius: 24px;
+      padding: 44px 36px;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 24px 70px rgba(59, 10, 26, 0.5), 0 0 30px rgba(212, 175, 55, 0.25);
+      overflow: hidden;
+    }
+    .shimmer-top {
+      height: 5px;
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      background: linear-gradient(90deg, #7a1f35, #ff4e88, #ffd700, #ff7e5f, #7a1f35);
+      background-size: 300% 100%;
+      animation: shimmerFlow 5s linear infinite;
+    }
+    @keyframes shimmerFlow { 0% { background-position: 0% 0%; } 100% { background-position: 300% 0%; } }
+    .gift-spinner {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 20px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #faf2d8, #f2dd92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      box-shadow: 0 8px 24px rgba(212, 175, 55, 0.35);
+      animation: pulsePulse 1.8s ease-in-out infinite alternate;
+    }
+    @keyframes pulsePulse {
+      0% { transform: scale(0.95); box-shadow: 0 4px 16px rgba(212, 175, 55, 0.25); }
+      100% { transform: scale(1.08); box-shadow: 0 12px 32px rgba(212, 175, 55, 0.45); }
+    }
+    .pay-title {
+      font-family: Georgia, serif;
+      font-size: 1.5rem;
+      color: #3b0a1a;
+      margin: 0 0 8px;
+      font-weight: 700;
+    }
+    .pay-sub {
+      color: #6a5759;
+      font-size: 13px;
+      margin: 0 0 20px;
+    }
+    .pay-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #faf2d8;
+      color: #7a1f35;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 6px 14px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(212, 175, 55, 0.4);
+    }
+  </style>
+</head>
 <body>
-  <div class="s"></div>
-  <h2 style="font-family:Georgia,serif;margin:0 0 6px;">Redirecting to secure payment</h2>
-  <p style="opacity:.8;margin:0;">Powered by CCAvenue · Order ${escapeHtml(orderId)} · ₹${escapeHtml(finalTotalAmount)}</p>
-  <form id="f" method="post" action="${escapeHtml(checkoutUrl)}">
-    <input type="hidden" name="encRequest" value="${escapeHtml(ciphertext)}" />
-    <input type="hidden" name="access_code" value="${escapeHtml(ACCESS_CODE)}" />
-  </form>
+
+  <div class="pay-card">
+    <div class="shimmer-top"></div>
+    <div class="pay-badge">🔒 256-Bit Encrypted Payment</div>
+    <div class="gift-spinner">🎁</div>
+    <h2 class="pay-title">Redirecting to Secure Payment</h2>
+    <p class="pay-sub">Powered by CCAvenue · Order ${escapeHtml(orderId)} · ₹${escapeHtml(finalTotalAmount)}</p>
+    <form id="f" method="post" action="${escapeHtml(checkoutUrl)}">
+      <input type="hidden" name="encRequest" value="${escapeHtml(ciphertext)}" />
+      <input type="hidden" name="access_code" value="${escapeHtml(ACCESS_CODE)}" />
+    </form>
+  </div>
   <script>document.getElementById('f').submit();</script>
-</body></html>`;
+</body>
+</html>`;
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.status(200).send(html);
