@@ -445,7 +445,7 @@ async function renderProductDetail() {
         </div>
 
         <div class="pd-perks">
-          <div class="perk"><i class="fas fa-truck"></i><div><b>Pan India delivery</b><br><span style="color:var(--muted)">Free shipping over ₹999</span></div></div>
+          <div class="perk"><i class="fas fa-truck"></i><div><b>Pan India delivery</b><br><span style="color:var(--muted)">Calculated at checkout</span></div></div>
           <div class="perk"><i class="fas fa-box-open"></i><div><b>Premium packaging</b><br><span style="color:var(--muted)">Gift-ready out of the box</span></div></div>
           <div class="perk"><i class="fas fa-shield-halved"></i><div><b>Secure checkout</b><br><span style="color:var(--muted)">CCAvenue · UPI · Card</span></div></div>
           <div class="perk"><i class="fas fa-rotate-left"></i><div><b>Easy returns</b><br><span style="color:var(--muted)">7-day return window</span></div></div>
@@ -757,7 +757,7 @@ function renderCart() {
         <h3>Order Summary</h3>
         <div class="line"><span>Subtotal</span><span>${fmtINR(subtotal)}</span></div>
         ${discount > 0 ? `<div class="line" style="color:var(--success);"><span>Discount (${escapeHTML(state.appliedCoupon.code)})</span><span>−${fmtINR(discount)}</span></div>` : ''}
-        <div class="line"><span>Shipping</span><span style="font-size:12px;color:var(--muted);">${subtotal > 999 ? 'Free' : 'Calculated at checkout'}</span></div>
+        <div class="line"><span>Shipping</span><span style="font-size:12px;color:var(--muted);">Calculated at checkout</span></div>
         <div class="line total"><span>Total</span><span>${fmtINR(total)}</span></div>
         ${total >= 10 ? `<div class="earn-points" style="margin-top:10px;" data-testid="cart-earn-points"><i class="fas fa-coins"></i> You'll earn <b>${Math.floor(total / 10)}</b> loyalty points on this order</div>` : ''}
 

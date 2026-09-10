@@ -1,5 +1,5 @@
 const leadsHandler = require('./_lib/leads');
-const recoverOrderHandler = require('./_lib/recover-order');
+const recoverOrderHandler = require('./admin/_lib/recover-order');
 
 module.exports = async function handler(req, res) {
   const action = req.query.action || '';

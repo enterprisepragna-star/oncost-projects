@@ -10,7 +10,7 @@
 //
 // Also accepts trailing path: /api/delhivery/serviceability?... (uses last path segment as action).
 
-const { checkPincode, calculateRate, createShipment, schedulePickup, trackShipment, BASE, PICKUP_PINCODE } = require('./_lib/client');
+const { checkPincode, calculateRate, createShipment, schedulePickup, trackShipment, BASE, PICKUP_PINCODE } = require('./delhivery/_lib/client');
 
 function parseAction(req) {
   // Action from ?action= query OR last segment of URL path
@@ -31,15 +31,19 @@ async function handleServiceability(req, res) {
 
   const [svc, rate] = await Promise.all([
     checkPincode(drop_pincode).catch(e => ({ serviceable: false, error: e.message })),
-    calculateRate({ pickup_pincode, drop_pincode, weight_grams }).catch(e => ({ total_amount: 0, error: e.message })),
+    calculateRate({ pickup_pincode, drop_pincode, weight_grams }).catch(e => ({ error: e.message })),
   ]);
   if (!svc.serviceable) return res.status(200).json({ serviceable: false, message: 'Delivery not available to this pincode', ...svc });
+  if (rate.error || rate.total_amount == null) {
+    return res.status(200).json({ serviceable: false, message: 'Unable to calculate live shipping rate for this pincode.', error: rate.error });
+  }
+
   res.status(200).json({
     serviceable: true,
     pincode: drop_pincode,
     state: svc.state,
     district: svc.district,
-    shipping_amount: Math.round(rate.total_amount || 79),
+    shipping_amount: Math.round(rate.total_amount),
     chargeable_weight_g: rate.chargeable_weight_g,
     zone: rate.zone,
     mode: 'Surface',
@@ -189,7 +193,54 @@ async function handleWebhook(req, res) {
   }
 }
 
+
+async function handleSyncStatus(req, res) {
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SUPABASE_URL || !SERVICE_KEY) return res.status(500).json({ error: 'Server env not configured' });
+
+  // 1. Fetch orders that are Packed or Shipped and have an AWB
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/orders?status=in.(Packed,Shipped)&awb_number=not.is.null`, {
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` }
+  });
+  const orders = await r.json();
+  if (!Array.isArray(orders)) return res.status(200).json({ ok: true, msg: 'No active orders found' });
+
+  let updatedCount = 0;
+  for (const o of orders) {
+    try {
+      const trackData = await trackShipment(o.awb_number);
+      const pkg = trackData?.ShipmentData?.[0]?.Shipment || trackData;
+      
+      const statusText = String(pkg?.Status?.Status || pkg?.Status?.StatusType || pkg?.status || '').toUpperCase();
+      const statusCode = String(pkg?.Status?.StatusType || pkg?.status_code || '').toUpperCase();
+      
+      const isShipped = statusText.includes('TRANSIT') || statusText.includes('PICKED') || statusText.includes('DISPATCH') || statusCode === 'UD' || statusCode === 'PT';
+      const isDelivered = statusText.includes('DELIVERED') || statusCode === 'DL';
+      
+      let newDbStatus = null;
+      if (isDelivered) newDbStatus = 'Delivered';
+      else if (isShipped && o.status === 'Packed') newDbStatus = 'Shipped';
+      
+      if (newDbStatus && newDbStatus !== o.status) {
+         await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${o.id}`, {
+            method: 'PATCH',
+            headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newDbStatus }),
+         });
+         updatedCount++;
+         console.log(`[sync-status] AWB ${o.awb_number} -> ${newDbStatus}`);
+      }
+    } catch(err) {
+      console.error(`[sync-status] Failed to track ${o.awb_number}:`, err.message);
+    }
+  }
+
+  return res.status(200).json({ ok: true, checked: orders.length, updated: updatedCount });
+}
+
 module.exports = async function handler(req, res) {
+
 
   try {
     const action = parseAction(req);
@@ -198,11 +249,13 @@ module.exports = async function handler(req, res) {
       case 'create-shipment':   return await handleCreateShipment(req, res);
       case 'label':             return await handleLabel(req, res);
       case 'schedule-pickup':   return await handleSchedulePickup(req, res);
-      case 'track':             return await handleTrack(req, res);\n      case 'webhook':           return await handleWebhook(req, res);
+      case 'track':             return await handleTrack(req, res);
+      case 'webhook':           return await handleWebhook(req, res);
+      case 'sync-status':       return await handleSyncStatus(req, res);
       default:
         return res.status(400).json({
           error: 'Unknown action',
-          valid_actions: ['serviceability', 'create-shipment', 'label', 'schedule-pickup', 'track', 'webhook'],
+          valid_actions: ['serviceability', 'create-shipment', 'label', 'schedule-pickup', 'track', 'webhook', 'sync-status'],
           usage: 'GET /api/delhivery?action=serviceability&drop_pincode=560001  OR  /api/delhivery/serviceability?drop_pincode=560001',
         });
     }

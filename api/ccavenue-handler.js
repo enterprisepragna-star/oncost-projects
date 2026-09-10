@@ -1,5 +1,5 @@
-const initiateHandler = require('./_lib/initiate');
-const responseHandler = require('./_lib/response');
+const initiateHandler = require('./ccavenue/_lib/initiate');
+const responseHandler = require('./ccavenue/_lib/response');
 
 module.exports = async function handler(req, res) {
   const action = req.query.action || '';

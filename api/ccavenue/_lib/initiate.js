@@ -47,7 +47,7 @@ module.exports = async function handler(req, res) {
   const userId       = body.user_id || null;
   const appliedCoup  = body.applied_coupon || '';
   const subtotal     = Number(body.items_subtotal || 0);
-  const shippingAmt  = Number(body.shipping_amount || 0);
+  let shippingAmt  = Number(body.shipping_amount || 0);
   let discountAmt    = Number(body.discount_amount || 0);
 
   if (Number(amount) <= 0) { res.status(400).json({ error: 'Invalid amount' }); return; }
