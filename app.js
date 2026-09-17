@@ -1860,27 +1860,7 @@ function renderRecentlyViewed() {
       <section style="margin-top: 40px; padding: 0 5%;">
         <h2 style="font-size: 24px; font-weight: 600; margin-bottom: 20px;">Recently Viewed By You</h2>
         <div class="product-grid">
-          ${displayItems.map(p => {
-            const offer = p.offer_price && p.offer_price < p.price;
-            const inWishlist = state.wishlist.some(w => w.product_id === p.id);
-            const wishBtn = state.user ? `<button class="wish-btn ${inWishlist?'on':''}" onclick="event.preventDefault();event.stopPropagation();toggleWishlist('${escapeHTML(p.id)}')"><i class="${inWishlist?'fas':'far'} fa-heart"></i></button>` : '';
-            const shareBtn = `<button class="share-btn" onclick="event.preventDefault();event.stopPropagation(); window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(window.location.origin + '/product.html?id=' + '${escapeHTML(p.id)}'), '_blank')" title="Share on WhatsApp"><i class="fas fa-share-nodes"></i></button>`;
-            return `
-            <a href="product.html?id=${p.id}" class="product-card">
-              <div class="product-img">
-                <img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src='https://via.placeholder.com/400x400.png?text=Image+Not+Found'; this.style.objectFit='contain';" />
-                ${wishBtn}
-                ${shareBtn}
-                ${offer ? `<span class="badge save">Save ${Math.round(((p.price - p.offer_price)/p.price)*100)}%</span>` : ''}
-              </div>
-              <div class="product-info">
-                <h3>${escapeHTML(p.name)}</h3>
-                <div class="price">
-                  ${offer ? `<span>${fmtINR(p.offer_price)}</span> <del>${fmtINR(p.price)}</del>` : `<span>${fmtINR(p.price)}</span>`}
-                </div>
-              </div>
-            </a>`;
-          }).join('')}
+          ${displayItems.map(p => productCardHTML(p)).join('')}
         </div>
       </section>
     `;
@@ -2059,7 +2039,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // Social Proof Toast Logic
 let socialProofTimer;
 function initSocialProofToast() {
-  if (window.location.pathname.includes('admin')) return;
+  const path = window.location.pathname;
+  const isHome = path === '/' || path.endsWith('index.html');
+  if (!isHome) return;
+  
   if (!state.products || !state.products.length) return;
   
   let toast = document.getElementById('social-proof-toast');
